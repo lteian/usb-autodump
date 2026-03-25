@@ -2,6 +2,8 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QString>
+#include <QtGlobal>
 #include <QMap>
 #include <QLabel>
 #include <QTableWidget>
@@ -35,6 +37,7 @@ private slots:
     void onEjectClicked(const QString& drive);
     void onCancelClicked(const QString& drive);
     void onSettingsClicked();
+    QString formatSize(qint64 b);
     void updateStatusBar();
     void refreshPendingList();
 
