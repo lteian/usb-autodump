@@ -1,0 +1,7 @@
+{
+    "run-as": "package",
+    "user": "usb-autodump",
+    "group": "nobody",
+    "description": "USB Auto Dump Service",
+    "port": 8765
+}

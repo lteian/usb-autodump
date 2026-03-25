@@ -1,0 +1,16 @@
+{
+  "package": "usb-autodump",
+  "version": "1.0.0",
+  "arch": ["broadwell", "broadwellnk", "v1000", "geminilake", "x86_64"],
+  "description": "USB auto dump tool with FTP upload",
+  "maintainer": "lteian",
+  "install_deps": ["python3"],
+  "startup": {
+    "type": "startup",
+    "script": "startup.sh"
+  },
+  "privileges": {
+    "run-as": "package",
+    "port-forward": false
+  }
+}

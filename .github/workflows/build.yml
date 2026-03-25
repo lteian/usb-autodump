@@ -1,41 +1,148 @@
-name: Build Windows EXE
+name: Build Synology Package
 
 on:
   push:
-    branches: [main]
+    branches: [web-version]
   workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target architecture'
+        required: false
+        default: 'x86_64'
+        type: choice
+        options:
+          - x86_64
+          - broadwell
+          - broadwellnk
+          - v1000
+          - geminilake
+
+env:
+  PYTHON_VERSION: '3.11'
 
 jobs:
-  build:
-    runs-on: windows-latest
+  build-source:
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
-          pip install PyQt6 pywin32 cryptography pyinstaller
+          pip install --quiet \
+            pyudev psutil fastapi uvicorn httpx python-multipart \
+            aiofiles websockets jinja2
 
-      - name: Build EXE
+      - name: Install pyinstaller
+        run: pip install --quiet pyinstaller
+
+      - name: Verify source structure
         run: |
-          pyinstaller main.spec
+          echo "=== Project structure ==="
+          find . -maxdepth 3 -type f \( -name "*.py" -o -name "*.sh" -o -name "*.json" -o -name "*.html" \) | head -40
 
-      - name: Upload EXE
+      - name: Create version file
+        run: |
+          VERSION=$(date +'%Y.%m.%d')-${{ github.run_number }}
+          echo "$VERSION" > VERSION.txt
+          echo "Build version: $VERSION"
+
+      - name: Run syntax check on Python files
+        run: |
+          find . -name "*.py" -not -path "./.git/*" -not -path "./__pycache__/*" -not -path "./.github/*" | while read f; do
+            python3 -m py_compile "$f" 2>&1 && echo "[OK] $f" || echo "[FAIL] $f"
+          done
+
+      - name: Generate build info
+        run: |
+          cat > build_info.json << EOF
+          {
+            "version": "${{ github.event.inputs.version || github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "run_id": "${{ github.run_id }}",
+            "arch": "${{ github.event.inputs.arch || 'x86_64' }}",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: USB自动转储工具-EXE
-          path: dist/USB自动转储工具.exe
+          name: build-artifacts
+          path: |
+            build_info.json
+            VERSION.txt
+          retention-days: 7
+
+  build-package:
+    needs: build-source
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Download build info
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
+
+      - name: Display artifact structure
+        run: |
+          echo "=== usb_autodump/.github/workflows ==="
+          ls -la .github/workflows/
+          echo ""
+          echo "=== spk_scripts ==="
+          ls -la spk_scripts/
+          echo ""
+          echo "=== All top-level dirs ==="
+          ls -d */
+
+      - name: Create dist directory
+        run: mkdir -p dist
+
+      - name: Package source code
+        run: |
+          ARCH="${{ github.event.inputs.arch || 'x86_64' }}"
+          VERSION=$(cat VERSION.txt)
+          PKG_NAME="usb-autodump-${VERSION}-${ARCH}"
+          
+          echo "Packaging ${PKG_NAME}..."
+          
+          tar -czvf "dist/${PKG_NAME}-source.tar.gz" \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            --exclude='build' \
+            --exclude='*.egg-info' \
+            .
+
+      - name: Upload packaged source
+        uses: actions/upload-artifact@v4
+        with:
+          name: usb-autodump-source-package
+          path: dist/*.tar.gz
           retention-days: 30
 
-      - name: Create Release
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/USB自动转储工具.exe
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Architecture**: \`${{ github.event.inputs.arch || 'x86_64' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY

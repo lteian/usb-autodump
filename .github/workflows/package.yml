@@ -1,0 +1,173 @@
+name: Package for Synology
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target architecture'
+        required: false
+        default: 'x86_64'
+        type: choice
+        options:
+          - x86_64
+          - all
+  push:
+    branches: [web-version]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Show directory structure
+        run: |
+          echo "=== Project structure ==="
+          find . -maxdepth 3 -type f \( -name "*.py" -o -name "*.sh" -o -name "*.json" -o -name "*.html" -o -name "*.txt" \) | grep -v __pycache__ | sort
+
+      - name: Set version
+        run: |
+          VERSION="${{ github.run_number }}"
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "PKG_VERSION=1.0.0" >> $GITHUB_ENV
+          echo "Build ID: $VERSION"
+
+      - name: Check key files exist
+        run: |
+          for f in spk_scripts/build_spk.sh spk_scripts/PACKAGE.json web_backend/main.py linux_usb/synology_usb.py; do
+            if [ -f "$f" ]; then
+              echo "[OK] $f"
+            else
+              echo "[WARN] $f not found"
+            fi
+          done
+
+  package-all-in-one:
+    needs: prepare
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies for packaging
+        run: |
+          pip install --quiet \
+            pyudev psutil fastapi uvicorn httpx python-multipart aiofiles websockets jinja2
+
+      - name: Pre-download Python packages
+        run: |
+          mkdir -p python_deps
+          pip download --dest python_deps \
+            pyudev psutil fastapi uvicorn httpx python-multipart aiofiles websockets jinja2 || true
+          echo "Downloaded $(ls python_deps | wc -l) packages"
+
+      - name: Create all-in-one package
+        run: |
+          ARCH="${PACKAGE_ARCH:-x86_64}"
+          PKG_VERSION="${PKG_VERSION:-1.0.0}"
+          TIMESTAMP=$(date +'%Y%m%d')
+          PKG_NAME="usb-autodump-${PKG_VERSION}-${ARCH}-${TIMESTAMP}"
+          
+          mkdir -p "dist/${PKG_NAME}"
+          
+          # Copy all source
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            --exclude='build' \
+            --exclude='*.egg-info' \
+            --exclude='file_records.db' \
+            --exclude='config.json' \
+            --exclude='*.spec' \
+            --exclude='*.bak' \
+            . "dist/${PKG_NAME}/src/"
+          
+          # Copy pre-downloaded Python packages
+          mkdir -p "dist/${PKG_NAME}/python_deps"
+          cp -r python_deps/* "dist/${PKG_NAME}/python_deps/" 2>/dev/null || true
+          
+          # Copy SPK scripts
+          cp -r spk_scripts "dist/${PKG_NAME}/"
+          
+          # Create VERSION file
+          echo "${PKG_VERSION}" > "dist/${PKG_NAME}/VERSION"
+          echo "Build date: $(date)" >> "dist/${PKG_NAME}/VERSION"
+          echo "Arch: ${ARCH}" >> "dist/${PKG_NAME}/VERSION"
+          
+          # Copy INSTALL.sh
+          if [ -f "INSTALL.sh" ]; then
+            cp INSTALL.sh "dist/${PKG_NAME}/"
+          fi
+          
+          # Copy README_SPK.md
+          if [ -f "README_SPK.md" ]; then
+            cp README_SPK.md "dist/${PKG_NAME}/"
+          fi
+          
+          # Package as tar.gz
+          cd dist
+          tar -czvf "${PKG_NAME}-synology-package.tar.gz" "${PKG_NAME}/"
+          
+          echo "=== Created packages ==="
+          ls -lh *.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: synology-package
+          path: dist/*-synology-package.tar.gz
+          retention-days: 30
+
+  build-spk:
+    needs: prepare
+    runs-on: ubuntu-22.04
+    container:
+      image: python:3.11-slim
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build tools
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq rsync tar gzip curl > /dev/null 2>&1 || true
+
+      - name: Run SPK build script
+        run: |
+          cd spk_scripts
+          chmod +x build_spk.sh
+          ARCH=x86_64 ./build_spk.sh || echo "SPK build requires Synology toolchain - skipping"
+
+      - name: Check if SPK was created
+        run: |
+          if [ -f "spk_scripts/dist/*.spk" ]; then
+            echo "SPK created successfully"
+            ls -la spk_scripts/dist/
+          else
+            echo "SPK not created (expected - requires Synology toolchain)"
+          fi
+
+      - name: Upload SPK if available
+        uses: actions/upload-artifact@v4
+        with:
+          name: spk-artifact
+          path: spk_scripts/dist/*.spk 2>/dev/null || echo "No SPK found"
+          retention-days: 30

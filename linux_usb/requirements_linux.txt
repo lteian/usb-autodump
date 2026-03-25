@@ -1,0 +1,12 @@
+# Linux USB 模块依赖
+# 安装: pip install -r requirements_linux.txt
+
+# USB 设备检测和监控
+pyudev>=0.24
+
+# 系统信息和进程管理
+psutil>=5.9
+
+# 可选: 增强格式化支持
+# ntfs-3g>=2017.3.23  # NTFS 读写支持 (如需要)
+# exfat-fuse>=1.3.0   # exFAT 支持 (如需要)
