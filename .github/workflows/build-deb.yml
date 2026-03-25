@@ -19,7 +19,7 @@ jobs:
 
       - name: Configure & Build
         run: |
-          mkdir build && cd build
+          mkdir -p build && cd build
           cmake ..
           cmake --build . --config Release
 
@@ -28,32 +28,16 @@ jobs:
           PKG=/tmp/usb-autodump-pkg
           rm -rf $PKG
 
-          # Create package directory structure
           mkdir -p $PKG/DEBIAN
           mkdir -p $PKG/usr/local/bin
           mkdir -p $PKG/usr/share/applications
-          mkdir -p $PKG/usr/share/icons/hicolor/256x256/apps
 
-          # Copy binary
           cp build/usb-autodump $PKG/usr/local/bin/usb-autodump
           chmod 755 $PKG/usr/local/bin/usb-autodump
 
-          # Copy desktop file
           cp linux/usb-autodump.desktop $PKG/usr/share/applications/usb-autodump.desktop
           chmod 644 $PKG/usr/share/applications/usb-autodump.desktop
 
-          # Try to generate icon with Python PIL
-          python3 -c "
-from PIL import Image, ImageDraw
-img = Image.new('RGB', (256, 256), color='#1e1e1e')
-draw = ImageDraw.Draw(img)
-draw.ellipse([30, 30, 226, 226], fill='#FF9800', outline='#e65100', width=4)
-draw.rectangle([100, 80, 156, 110], fill='white')
-draw.rectangle([100, 115, 156, 140], fill='white')
-img.save('$PKG/usr/share/icons/hicolor/256x256/apps/usb-autodump.png')
-" 2>/dev/null || echo "PIL not available, skipping icon"
-
-          # DEBIAN control
           cat > $PKG/DEBIAN/control << 'CTRL'
 Package: usb-autodump
 Version: 1.0.0
@@ -65,18 +49,13 @@ Description: USB自动转储工具
   支持U盘自动检测、视频转储、FTP上传、格式化弹出
 CTRL
 
-          # postinst
           cat > $PKG/DEBIAN/postinst << 'POST'
 #!/bin/bash
 update-desktop-database /usr/share/applications/ 2>/dev/null || true
 POST
           chmod 755 $PKG/DEBIAN/postinst
 
-          # Build DEB
           dpkg-deb --build $PKG dist/usb-autodump_1.0.0_amd64.deb 2>&1
-          echo "=== DEB contents ==="
-          dpkg-deb --contents dist/usb-autodump_1.0.0_amd64.deb | grep -E "bin|desktop|icon" | head -10
-          echo "=== DEB size ==="
           ls -lh dist/usb-autodump_1.0.0_amd64.deb
 
       - uses: actions/upload-artifact@v4
@@ -84,11 +63,3 @@ POST
           name: usb-autodump-DEB
           path: dist/usb-autodump_1.0.0_amd64.deb
           retention-days: 30
-
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/usb-autodump_1.0.0_amd64.deb
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
