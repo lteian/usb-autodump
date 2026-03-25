@@ -19,7 +19,7 @@ jobs:
       - name: Install Qt5
         run: |
           pip install aqtinstall
-          aqt install-tool -O C:\Qt 5.15.2 win64_msvc2019_64
+          aqt install-qt windows win64_msvc2019_64 5.15.2 -O C:\Qt
 
       - name: Set Qt path
         run: Add-Content $env:GITHUB_PATH "C:\Qt\5.15.2\win64_msvc2019_64\bin"
