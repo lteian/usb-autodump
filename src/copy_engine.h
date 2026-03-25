@@ -6,6 +6,7 @@
 #include <QList>
 #include <QMutex>
 #include <QThread>
+#include <QMap>
 
 struct CopyTask {
     QString usbDrive;

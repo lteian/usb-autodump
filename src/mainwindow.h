@@ -3,6 +3,8 @@
 
 #include <QMainWindow>
 #include <QMap>
+#include <QLabel>
+#include <QTableWidget>
 #include <QTimer>
 #include <QList>
 
