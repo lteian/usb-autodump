@@ -17,8 +17,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=['test', 'tkinter', 'matplotlib'],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=True,
     cipher=block_cipher,
     noarchive=False,
 )
