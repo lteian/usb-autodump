@@ -157,19 +157,6 @@ class SettingsDialog(QDialog):
         adv_group.setLayout(adv_layout)
         layout.addWidget(adv_group)
 
-        reset_btn = QPushButton("🔑 忘记密码？重置所有配置")
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                background: #b71c1c;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                font-size: 12px;
-            }
-            QPushButton:hover { background: #c62828; }
-        """)
-        layout.addWidget(reset_btn)
 
         # ── 底部按钮 ─────────────────────────────────────
         btn_layout = QHBoxLayout()
