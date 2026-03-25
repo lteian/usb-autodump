@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>USBCard</class>
+ <widget class="QFrame" name="USBCard">
+  <property name="geometry">
+   <rect>
+    <x>0</x><y>0</y>
+    <width>220</width>
+    <height>160</width>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>USB</string>
+  </property>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
