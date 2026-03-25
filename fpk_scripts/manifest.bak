@@ -1,5 +1,5 @@
 appname               = usb-autodump
-version               = 1.0.1
+version               = 1.0.0
 display_name          = U盘自动转储
 desc                  = USB自动检测、视频转存、FTP上传的Web管理工具
 arch                  = x86_64

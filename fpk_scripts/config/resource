@@ -1,6 +1,6 @@
 {
     "port": {
-        "port": 8765
+        "port": 30000
     },
     "data-share":
     {

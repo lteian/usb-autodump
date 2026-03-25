@@ -157,7 +157,6 @@ class SettingsDialog(QDialog):
         adv_group.setLayout(adv_layout)
         layout.addWidget(adv_group)
 
-        # ── 忘记密码 ─────────────────────────────────────
         reset_btn = QPushButton("🔑 忘记密码？重置所有配置")
         reset_btn.setStyleSheet("""
             QPushButton {
@@ -170,7 +169,6 @@ class SettingsDialog(QDialog):
             }
             QPushButton:hover { background: #c62828; }
         """)
-        reset_btn.clicked.connect(self._on_reset)
         layout.addWidget(reset_btn)
 
         # ── 底部按钮 ─────────────────────────────────────
@@ -191,39 +189,6 @@ class SettingsDialog(QDialog):
         if path:
             self.local_path_edit.setText(path)
 
-    def _on_reset(self):
-        reply = QMessageBox.question(
-            self, "⚠️ 确认重置",
-            "确定要重置所有配置吗？\n\n"
-            "此操作将：\n"
-            "• 删除加密密码\n"
-            "• 删除 FTP 配置\n"
-            "• 删除所有已保存的记录\n\n"
-            "此操作不可恢复！",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-
-        try:
-            from pathlib import Path
-            cfg_path = Path.home() / ".config" / "usb_autodump" / "config.json"
-            db_path = Path.home() / ".local" / "share" / "usb_autodump" / "file_records.db"
-            for p in [cfg_path, db_path]:
-                if p.exists():
-                    p.unlink()
-                    logger.info(f"已删除: {p}")
-            QMessageBox.information(self, "已重置",
-                                    "配置已清空，请重启程序。")
-            logger.info("用户重置所有配置")
-            self.accept()
-            import sys
-            sys.exit(0)
-        except Exception as e:
-            QMessageBox.critical(self, "重置失败", f"清空配置失败:\n{e}")
-
-    def _save(self):
         # 验证加密密码
         new_pwd = self.enc_pwd_edit.text().strip()
         confirm_pwd = self.enc_pwd2_edit.text().strip()
