@@ -1,6 +1,9 @@
 name: Build Windows EXE (Qt5)
 
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches: [main, cpp]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -8,20 +11,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Qt5
-        uses: maxime-rosenthal/setup-qt@v2
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          version: 5.15.2
-          qt-arch: win64_msvc2019_64
+          python-version: '3.11'
 
-      - name: Configure
+      - name: Install Qt5
+        run: |
+          pip install aqtinstall
+          aqt install-tool -O C:\Qt 5.15.2 win64_msvc2019_64
+
+      - name: Set Qt path
+        run: |
+          Add-Content $env:GITHUB_PATH "C:\Qt\5.15.2\win64_msvc2019_64\bin"
+
+      - name: Configure CMake
+        working-directory: build
         run: |
           mkdir build
-          cd build
-          cmake -G "Visual Studio 16 2019" -A x64 ..
+          cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release ..
 
       - name: Build
-        run: cmake --build build --config Release
+        working-directory: build
+        run: cmake --build . --config Release
 
       - name: Package
         run: |
