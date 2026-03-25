@@ -4,7 +4,7 @@ LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
 WEB_PORT="${PORT}"
 if [ -z "$WEB_PORT" ]; then
-    WEB_PORT=8765
+    WEB_PORT=30000
 fi
 
 log_msg() {
@@ -13,11 +13,11 @@ log_msg() {
 
 start_process() {
     if status; then
-        log_msg "Process already running"
+        log_msg "进程已在运行"
         return 0
     fi
 
-    log_msg "Starting USB自动转储服务 on port ${WEB_PORT} ..."
+    log_msg "启动 USB自动转储服务，端口 ${WEB_PORT} ..."
 
     cd "${TRIM_PKGVAR}/app/web_backend"
     
@@ -25,30 +25,47 @@ start_process() {
     if [ ! -d "venv" ]; then
         log_msg "创建 Python 虚拟环境..."
         python3 -m venv venv >> ${LOG_FILE} 2>&1
+        if [ $? -ne 0 ]; then
+            log_msg "虚拟环境创建失败，尝试直接安装..."
+        fi
     fi
     
-    # 安装依赖
+    # 安装依赖 - 使用 break-system-packages 因为 Debian 12 的 PEP 668 限制
     log_msg "安装 Python 依赖..."
-    source venv/bin/activate
-    pip install --quiet -r requirements.txt >> ${LOG_FILE} 2>&1
-    pip install --quiet pyudev psutil >> ${LOG_FILE} 2>&1
-    deactivate
+    
+    # 优先用虚拟环境
+    if [ -d "venv" ] && [ -f "venv/bin/pip" ]; then
+        source venv/bin/activate
+        pip install --quiet fastapi uvicorn pyqt6 pywin32 cryptography pyudev psutil >> ${LOG_FILE} 2>&1
+        pip install --quiet websockets >> ${LOG_FILE} 2>&1
+        deactivate
+    else
+        # 备选：直接用 pip3 --break-system-packages
+        pip3 install --break-system-packages --quiet fastapi uvicorn pyqt6 pywin32 cryptography pyudev psutil websockets >> ${LOG_FILE} 2>&1
+    fi
 
     # 启动 FastAPI
     log_msg "启动 uvicorn 服务..."
-    source venv/bin/activate
-    nohup python -m uvicorn main:app --host 0.0.0.0 --port ${WEB_PORT} >> ${LOG_FILE} 2>&1 &
-    local pid=$!
-    printf "%s" "$pid" > ${PID_FILE}
-    deactivate
     
-    sleep 2
+    if [ -d "venv" ] && [ -f "venv/bin/python" ]; then
+        source venv/bin/activate
+        nohup venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${WEB_PORT} >> ${LOG_FILE} 2>&1 &
+        local pid=$!
+        printf "%s" "$pid" > ${PID_FILE}
+        deactivate
+    else
+        nohup python3 -m uvicorn main:app --host 0.0.0.0 --port ${WEB_PORT} >> ${LOG_FILE} 2>&1 &
+        local pid=$!
+        printf "%s" "$pid" > ${PID_FILE}
+    fi
+    
+    sleep 3
     
     if kill -0 ${pid} 2>/dev/null; then
         log_msg "服务已启动，PID=${pid}"
         return 0
     else
-        log_msg "服务启动失败"
+        log_msg "服务启动失败，查看日志: ${LOG_FILE}"
         return 1
     fi
 }
@@ -69,7 +86,7 @@ stop_process() {
     fi
     
     # 也杀掉可能的 uvicorn 进程
-    pkill -f "uvicorn main:app" >> ${LOG_FILE} 2>&1
+    pkill -f "uvicorn main:app" >> ${LOG_FILE} 2>&1 || true
     
     log_msg "服务已停止"
     return 0
