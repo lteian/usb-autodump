@@ -14,8 +14,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            qt5-default qtbase5-dev cmake build-essential dpkg wget
+          sudo apt-get install -y qt5-default qtbase5-dev cmake build-essential dpkg wget
 
       - name: Configure & Build
         run: |
@@ -23,39 +22,21 @@ jobs:
           cmake ..
           cmake --build . --config Release
 
-      - name: Package DEB with dpkg-deb
+      - name: Package DEB
         run: |
           PKG=/tmp/usb-autodump-pkg
           rm -rf $PKG
-
           mkdir -p $PKG/DEBIAN
           mkdir -p $PKG/usr/local/bin
           mkdir -p $PKG/usr/share/applications
-
           cp build/usb-autodump $PKG/usr/local/bin/usb-autodump
           chmod 755 $PKG/usr/local/bin/usb-autodump
-
           cp linux/usb-autodump.desktop $PKG/usr/share/applications/usb-autodump.desktop
           chmod 644 $PKG/usr/share/applications/usb-autodump.desktop
-
-          cat > $PKG/DEBIAN/control << 'CTRL'
-Package: usb-autodump
-Version: 1.0.0
-Section: utils
-Priority: optional
-Architecture: amd64
-Maintainer: lteian
-Description: USB自动转储工具
-  支持U盘自动检测、视频转储、FTP上传、格式化弹出
-CTRL
-
-          cat > $PKG/DEBIAN/postinst << 'POST'
-#!/bin/bash
-update-desktop-database /usr/share/applications/ 2>/dev/null || true
-POST
+          printf 'Package: usb-autodump\nVersion: 1.0.0\nSection: utils\nPriority: optional\nArchitecture: amd64\nMaintainer: lteian\nDescription: USB auto dump tool\n' > $PKG/DEBIAN/control
+          printf '#!/bin/bash\nupdate-desktop-database /usr/share/applications/ 2>/dev/null || true\n' > $PKG/DEBIAN/postinst
           chmod 755 $PKG/DEBIAN/postinst
-
-          dpkg-deb --build $PKG dist/usb-autodump_1.0.0_amd64.deb 2>&1
+          dpkg-deb --build $PKG dist/usb-autodump_1.0.0_amd64.deb
           ls -lh dist/usb-autodump_1.0.0_amd64.deb
 
       - uses: actions/upload-artifact@v4
