@@ -1,0 +1,4 @@
+*.pyc
+__pycache__/
+dist/
+file_records.db

@@ -9,20 +9,10 @@
     "use_tls": false,
     "max_retry": 3
   },
-  "video_extensions": [
-    ".mp4",
-    ".avi",
-    ".mkv",
-    ".mov",
-    ".wmv",
-    ".flv",
-    ".webm",
-    ".m4v",
-    ".mpg",
-    ".mpeg"
-  ],
+  "video_extensions": [".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpg", ".mpeg"],
   "auto_delete_local_after_upload": true,
   "auto_format_after_copy": false,
   "max_concurrent_uploads": 2,
-  "usb_paths": {}
+  "usb_paths": {},
+  "encryption_password": ""
 }

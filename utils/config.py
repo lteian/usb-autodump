@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 from utils.crypto import encrypt, decrypt
 
@@ -11,7 +10,7 @@ _default_config = {
         "host": "",
         "port": 21,
         "username": "",
-        "password": "",          # 加密存储
+        "password": "",
         "sub_path": "/",
         "use_tls": False,
         "max_retry": 3
@@ -20,20 +19,24 @@ _default_config = {
     "auto_delete_local_after_upload": True,
     "auto_format_after_copy": False,
     "max_concurrent_uploads": 2,
-    "usb_paths": {}             # {"E:": "/path/to/E", "F:": "/path/to/F"}
+    "usb_paths": {},
+    "encryption_password": ""
 }
 
 
 def load_config() -> dict:
     if not CONFIG_PATH.exists():
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         save_config(_default_config)
         return _default_config.copy()
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             cfg = json.load(f)
-        # 解密密码
-        if "ftp" in cfg and cfg["ftp"].get("password"):
-            cfg["ftp"]["password"] = decrypt(cfg["ftp"]["password"])
+        # 密码已加密存着，需要先拿到 encryption_password 才能解密
+        enc_pwd = cfg.get("encryption_password", "")
+        ftp_cfg = cfg.get("ftp", {})
+        if enc_pwd and ftp_cfg.get("password"):
+            ftp_cfg["password"] = decrypt(ftp_cfg["password"], enc_pwd)
         return cfg
     except Exception:
         return _default_config.copy()
@@ -41,18 +44,32 @@ def load_config() -> dict:
 
 def save_config(config: dict):
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    # 加密密码再存
     to_save = dict(config)
-    if "ftp" in to_save and to_save["ftp"].get("password"):
-        to_save["ftp"] = dict(to_save["ftp"])
-        to_save["ftp"]["password"] = encrypt(to_save["ftp"]["password"])
+    enc_pwd = to_save.get("encryption_password", "")
+    ftp_cfg = dict(to_save.get("ftp", {}))
+    if enc_pwd and ftp_cfg.get("password"):
+        ftp_cfg["password"] = encrypt(ftp_cfg["password"], enc_pwd)
+    to_save["ftp"] = ftp_cfg
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(to_save, f, ensure_ascii=False, indent=2)
 
 
-def get_video_extensions() -> list:
+def get_encryption_password() -> str:
+    return load_config().get("encryption_password", "")
+
+
+def set_encryption_password(password: str):
     cfg = load_config()
-    return cfg.get("video_extensions", [".mp4"])
+    cfg["encryption_password"] = password
+    save_config(cfg)
+
+
+def is_password_set() -> bool:
+    return bool(get_encryption_password())
+
+
+def get_video_extensions() -> list:
+    return load_config().get("video_extensions", [".mp4"])
 
 
 def get_local_path(usb_drive: str = None) -> str:

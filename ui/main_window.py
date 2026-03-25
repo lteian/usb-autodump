@@ -13,6 +13,8 @@ from core.ftp_uploader import FTPUploader
 from core.disk_tool import format_drive, eject_drive
 from core.file_record import get_pending_count_and_size, get_uploaded_count_and_size
 from utils.logger import get_logger
+from utils.config import is_password_set
+from ui.settings_dialog import require_password_setup
 
 logger = get_logger()
 MAX_USB_SLOTS = 8
@@ -21,6 +23,14 @@ MAX_USB_SLOTS = 8
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        # 首次运行强制设置加密密码
+        if not is_password_set():
+            logger.info("首次运行，强制设置加密密码...")
+            if not require_password_setup(self):
+                logger.warning("用户未设置加密密码，直接退出")
+                return
+            logger.info("加密密码已设置")
+
         self._usb_monitor = USBMonitor()
         self._copy_engine = CopyEngine()
         self._ftp_uploader = FTPUploader()
@@ -221,7 +231,9 @@ class MainWindow(QMainWindow):
         return f"{b}B"
 
     def closeEvent(self, event):
-        self._usb_monitor.stop()
-        self._ftp_uploader.stop()
+        if hasattr(self, '_usb_monitor'):
+            self._usb_monitor.stop()
+        if hasattr(self, '_ftp_uploader'):
+            self._ftp_uploader.stop()
         logger.info("应用退出")
         event.accept()
