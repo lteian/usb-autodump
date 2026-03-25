@@ -22,8 +22,7 @@ jobs:
           aqt install-tool -O C:\Qt 5.15.2 win64_msvc2019_64
 
       - name: Set Qt path
-        run: |
-          Add-Content $env:GITHUB_PATH "C:\Qt\5.15.2\win64_msvc2019_64\bin"
+        run: Add-Content $env:GITHUB_PATH "C:\Qt\5.15.2\win64_msvc2019_64\bin"
 
       - name: Configure CMake
         working-directory: build
@@ -46,11 +45,3 @@ jobs:
           name: usb-autodump-EXE
           path: dist/usb-autodump.exe
           retention-days: 30
-
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/usb-autodump.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
