@@ -14,7 +14,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt5-default qtbase5-dev cmake build-essential dpkg wget
+          sudo apt-get install -y qtbase5-dev qtchooser qt5-qmake cmake build-essential dpkg wget
 
       - name: Configure & Build
         run: |
