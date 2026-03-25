@@ -1,0 +1,116 @@
+#!/bin/bash
+
+LOG_FILE="${TRIM_PKGVAR}/info.log"
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+WEB_PORT="${PORT}"
+if [ -z "$WEB_PORT" ]; then
+    WEB_PORT=8765
+fi
+
+log_msg() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> ${LOG_FILE}
+}
+
+start_process() {
+    if status; then
+        log_msg "Process already running"
+        return 0
+    fi
+
+    log_msg "Starting USB自动转储服务 on port ${WEB_PORT} ..."
+
+    cd "${TRIM_PKGVAR}/app/web_backend"
+    
+    # 检查 Python 依赖
+    if [ ! -d "venv" ]; then
+        log_msg "创建 Python 虚拟环境..."
+        python3 -m venv venv >> ${LOG_FILE} 2>&1
+    fi
+    
+    # 安装依赖
+    log_msg "安装 Python 依赖..."
+    source venv/bin/activate
+    pip install --quiet -r requirements.txt >> ${LOG_FILE} 2>&1
+    pip install --quiet pyudev psutil >> ${LOG_FILE} 2>&1
+    deactivate
+
+    # 启动 FastAPI
+    log_msg "启动 uvicorn 服务..."
+    source venv/bin/activate
+    nohup python -m uvicorn main:app --host 0.0.0.0 --port ${WEB_PORT} >> ${LOG_FILE} 2>&1 &
+    local pid=$!
+    printf "%s" "$pid" > ${PID_FILE}
+    deactivate
+    
+    sleep 2
+    
+    if kill -0 ${pid} 2>/dev/null; then
+        log_msg "服务已启动，PID=${pid}"
+        return 0
+    else
+        log_msg "服务启动失败"
+        return 1
+    fi
+}
+
+stop_process() {
+    log_msg "停止 USB自动转储服务 ..."
+
+    if [ -f "${PID_FILE}" ]; then
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if kill -0 "${pid}" 2>/dev/null; then
+            kill -TERM ${pid} >> ${LOG_FILE} 2>&1
+            sleep 2
+            if kill -0 "${pid}" 2>/dev/null; then
+                kill -KILL "${pid}" >> ${LOG_FILE} 2>&1
+            fi
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    
+    # 也杀掉可能的 uvicorn 进程
+    pkill -f "uvicorn main:app" >> ${LOG_FILE} 2>&1
+    
+    log_msg "服务已停止"
+    return 0
+}
+
+check_process() {
+    local pid=$1
+    if kill -0 "${pid}" 2>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+status() {
+    if [ -f "${PID_FILE}" ]; then
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if check_process "${pid}"; then
+            return 0
+        else
+            rm -f "${PID_FILE}"
+        fi
+    fi
+    return 1
+}
+
+case $1 in
+start)
+    start_process
+    ;;
+stop)
+    stop_process
+    ;;
+status)
+    if status; then 
+        exit 0
+    else 
+        exit 3
+    fi
+    ;;
+*)
+    exit 1
+    ;;
+esac

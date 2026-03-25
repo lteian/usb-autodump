@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📀 U盘自动转储工具</title>
+  <style>
+    :root {
+      --bg-primary: #0f0f1a;
+      --bg-secondary: #1a1a2e;
+      --bg-card: #1e1e30;
+      --bg-card-hover: #252540;
+      --border-color: #2d2d4a;
+      --text-primary: #e0e0e0;
+      --text-secondary: #8888aa;
+      --text-muted: #5555770;
+      --accent-blue: #00d4ff;
+      --accent-green: #00ff9d;
+      --accent-red: #ff4466;
+      --accent-orange: #ff9d00;
+      --accent-purple: #9d00ff;
+      --neon-blue: rgba(0, 212, 255, 0.15);
+      --neon-green: rgba(0, 255, 157, 0.15);
+      --radius: 12px;
+      --radius-sm: 6px;
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+
+    /* ===== HEADER ===== */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: linear-gradient(180deg, var(--bg-primary) 0%, rgba(15,15,26,0.95) 100%);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .header-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      transition: var(--transition);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-red);
+      box-shadow: 0 0 6px var(--accent-red);
+      transition: var(--transition);
+    }
+
+    .status-dot.connected {
+      background: var(--accent-green);
+      box-shadow: 0 0 6px var(--accent-green);
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.connecting {
+      background: var(--accent-orange);
+      box-shadow: 0 0 6px var(--accent-orange);
+      animation: blink 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+    }
+
+    .btn-icon {
+      padding: 7px 10px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(0,255,157,0.2));
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, rgba(0,212,255,0.3), rgba(0,255,157,0.3));
+      box-shadow: 0 0 15px rgba(0,212,255,0.3);
+    }
+
+    .btn-danger {
+      border-color: var(--accent-red);
+      color: var(--accent-red);
+    }
+
+    .btn-danger:hover {
+      background: rgba(255,68,102,0.15);
+      box-shadow: 0 0 10px rgba(255,68,102,0.3);
+    }
+
+    /* ===== MAIN LAYOUT ===== */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .section-badge {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--neon-blue);
+      color: var(--accent-blue);
+      font-weight: 500;
+    }
+
+    .section-body {
+      padding: 16px;
+    }
+
+    /* ===== USB CARDS ===== */
+    .usb-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .usb-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 16px;
+      cursor: pointer;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .usb-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
+      opacity: 0;
+      transition: var(--transition);
+    }
+
+    .usb-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-blue);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3), 0 0 15px rgba(0,212,255,0.1);
+    }
+
+    .usb-card:hover::before { opacity: 1; }
+
+    .usb-card.active {
+      border-color: var(--accent-green);
+      box-shadow: 0 0 20px rgba(0,255,157,0.15);
+    }
+
+    .usb-card.active::before {
+      opacity: 1;
+      background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+    }
+
+    .usb-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .usb-icon {
+      font-size: 1.5rem;
+    }
+
+    .usb-label {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--neon-blue);
+      color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    .usb-path {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      font-family: 'Consolas', monospace;
+    }
+
+    .usb-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+
+    .usb-capacity {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .pie-container {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 12px;
+      position: relative;
+    }
+
+    .pie-chart {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .pie-bg {
+      fill: none;
+      stroke: var(--border-color);
+      stroke-width: 8;
+    }
+
+    .pie-used {
+      fill: none;
+      stroke: url(#pie-gradient);
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.5s ease;
+    }
+
+    .pie-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .usb-card-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .usb-card-actions .btn {
+      flex: 1;
+      justify-content: center;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+    }
+
+    /* ===== COPY QUEUE ===== */
+    .queue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .queue-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      transition: var(--transition);
+    }
+
+    .queue-item:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .queue-item-icon {
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .queue-item-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: 'Consolas', monospace;
+    }
+
+    .queue-item-status {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .progress-bar {
+      width: 100px;
+      height: 6px;
+      background: var(--border-color);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
+      transition: width 0.3s ease;
+    }
+
+    .progress-fill.error {
+      background: linear-gradient(90deg, var(--accent-red), var(--accent-orange));
+    }
+
+    .queue-item-percent {
+      font-size: 0.75rem;
+      color: var(--accent-blue);
+      font-weight: 600;
+      width: 36px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .queue-item-cancel {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 2px;
+      border-radius: 4px;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+
+    .queue-item-cancel:hover {
+      color: var(--accent-red);
+      background: rgba(255,68,102,0.1);
+    }
+
+    .queue-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      border-top: 1px solid var(--border-color);
+      margin-top: 8px;
+    }
+
+    .queue-empty {
+      text-align: center;
+      padding: 24px;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .queue-empty-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+
+    /* ===== UPLOAD QUEUE ===== */
+    .upload-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      transition: var(--transition);
+    }
+
+    .upload-item:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .upload-status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .upload-status.done { color: var(--accent-green); }
+    .upload-status.uploading { color: var(--accent-blue); }
+    .upload-status.pending { color: var(--text-secondary); }
+    .upload-status.error { color: var(--accent-red); }
+
+    /* ===== UPLOAD STATS BAR ===== */
+    .upload-stats-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 12px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+      font-size: 0.78rem;
+      flex-wrap: wrap;
+    }
+
+    .upload-stats-bar .stat {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .upload-stats-bar .stat-value {
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .upload-stats-bar .stat-pending .stat-value { color: var(--text-secondary); }
+    .upload-stats-bar .stat-active .stat-value { color: var(--accent-blue); }
+    .upload-stats-bar .stat-done .stat-value { color: var(--accent-green); }
+    .upload-stats-bar .stat-error .stat-value { color: var(--accent-red); }
+
+    .upload-stats-sep {
+      color: var(--border-color);
+    }
+
+    .upload-speed {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--accent-green);
+      font-weight: 600;
+      font-family: 'Consolas', monospace;
+    }
+
+    /* ===== CARD COPY PROGRESS ===== */
+    .card-copy-progress {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border-color);
+    }
+
+    .card-copy-label {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      margin-bottom: 5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-copy-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--accent-blue);
+      margin-bottom: 4px;
+    }
+
+    .card-copy-speed {
+      color: var(--accent-green);
+      font-family: 'Consolas', monospace;
+    }
+
+    .card-copy-progress .progress-bar {
+      height: 4px;
+      width: 100%;
+    }
+
+    .card-copy-overall {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    .card-copy-overall .overall-pct {
+      font-weight: 700;
+      color: var(--accent-blue);
+    }
+
+    /* ===== LOG PANEL ===== */
+    .log-toggle {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .log-toggle .arrow {
+      transition: transform 0.3s;
+      display: inline-block;
+    }
+
+    .log-toggle.open .arrow {
+      transform: rotate(90deg);
+    }
+
+    .log-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .log-content.open {
+      max-height: 300px;
+    }
+
+    .log-inner {
+      height: 250px;
+      overflow-y: auto;
+      padding: 0 16px 16px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.75rem;
+      line-height: 1.6;
+    }
+
+    .log-entry {
+      padding: 2px 0;
+      display: flex;
+      gap: 8px;
+    }
+
+    .log-time {
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .log-level {
+      flex-shrink: 0;
+      width: 50px;
+      font-weight: 600;
+    }
+
+    .log-level.INFO { color: var(--accent-blue); }
+    .log-level.SUCCESS { color: var(--accent-green); }
+    .log-level.WARNING { color: var(--accent-orange); }
+    .log-level.ERROR { color: var(--accent-red); }
+
+    .log-msg { color: var(--text-primary); word-break: break-all; }
+
+    /* ===== SETTINGS MODAL ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 520px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: var(--transition);
+    }
+
+    .modal-close:hover {
+      color: var(--accent-red);
+      background: rgba(255,68,102,0.1);
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .modal-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      transition: var(--transition);
+      outline: none;
+    }
+
+    .form-input:focus {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
+    }
+
+    .form-input::placeholder {
+      color: var(--text-secondary);
+      opacity: 0.6;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 100px;
+      gap: 8px;
+    }
+
+    .form-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .form-check input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent-blue);
+      cursor: pointer;
+    }
+
+    .tag-input-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      min-height: 38px;
+      transition: var(--transition);
+    }
+
+    .tag-input-container:focus-within {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
+    }
+
+    .tag {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: var(--neon-blue);
+      border: 1px solid rgba(0,212,255,0.3);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    .tag-remove {
+      cursor: pointer;
+      opacity: 0.7;
+      transition: var(--transition);
+    }
+
+    .tag-remove:hover { opacity: 1; }
+
+    .tag-input {
+      border: none;
+      background: transparent;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      min-width: 80px;
+      flex: 1;
+    }
+
+    .settings-section-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--accent-green);
+      margin: 16px 0 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px dashed var(--border-color);
+    }
+
+    /* ===== HELP MODAL ===== */
+    .help-content h3 {
+      font-size: 1rem;
+      color: var(--accent-blue);
+      margin: 12px 0 6px;
+    }
+
+    .help-content p, .help-content li {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .help-content ul {
+      padding-left: 20px;
+    }
+
+    /* ===== TOAST ===== */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+      animation: slideIn 0.3s ease;
+      max-width: 320px;
+    }
+
+    .toast.success { border-color: var(--accent-green); }
+    .toast.error { border-color: var(--accent-red); }
+    .toast.info { border-color: var(--accent-blue); }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 600px) {
+      .header { padding: 10px 12px; }
+      .header-title { font-size: 1rem; }
+      .status-indicator span { display: none; }
+      .container { padding: 10px; }
+      .usb-cards { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+      .form-row { grid-template-columns: 1fr; }
+      .progress-bar { width: 60px; }
+      .modal { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- SVG Defs -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="pie-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00d4ff"/>
+      <stop offset="100%" stop-color="#00ff9d"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-title">
+    <span>📀</span>
+    <span>U盘自动转储工具</span>
+  </div>
+  <div class="header-actions">
+    <div class="status-indicator">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">连接中...</span>
+    </div>
+    <button class="btn btn-icon" onclick="openSettings()" title="设置">⚙️</button>
+    <button class="btn btn-icon" onclick="openHelp()" title="帮助">❓</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="container">
+
+  <!-- USB DEVICES -->
+  <div class="section">
+    <div class="section-header">
+      <span>📦 已识别的 USB 设备</span>
+      <span class="section-badge" id="usbCount">0</span>
+    </div>
+    <div class="section-body">
+      <div class="usb-cards" id="usbCards">
+        <div class="queue-empty">
+          <div class="queue-empty-icon">🔌</div>
+          <div>等待连接 USB 设备...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COPY QUEUE -->
+  <div class="section">
+    <div class="section-header">
+      <span>📋 复制队列</span>
+      <span class="section-badge" id="copyCount">0</span>
+    </div>
+    <div class="section-body" style="padding-bottom:0">
+      <div class="queue-list" id="copyQueue">
+        <div class="queue-empty">
+          <div class="queue-empty-icon">📂</div>
+          <div>暂无复制任务</div>
+        </div>
+      </div>
+      <div class="queue-summary" id="copySummary" style="display:none">
+        <span id="copyProgressText">已完成 0/0</span>
+        <button class="btn btn-danger" style="padding:3px 10px;font-size:0.75rem" onclick="cancelAllCopy()">全部取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- UPLOAD QUEUE -->
+  <div class="section">
+    <div class="section-header">
+      <span>☁️ 上传队列 (FTP)</span>
+      <span class="section-badge" id="uploadCount">0</span>
+    </div>
+    <div class="section-body" style="padding-bottom:0">
+      <div class="queue-list" id="uploadQueue">
+        <div class="queue-empty">
+          <div class="queue-empty-icon">☁️</div>
+          <div>暂无上传任务</div>
+        </div>
+      </div>
+      <div class="queue-summary" id="uploadSummary" style="display:none">
+        <span id="uploadProgressText">已完成 0/0</span>
+        <button class="btn btn-danger" style="padding:3px 10px;font-size:0.75rem" onclick="cancelAllUpload()">全部取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOG PANEL -->
+  <div class="section">
+    <div class="section-header log-toggle open" onclick="toggleLog()">
+      <span>📜 操作日志</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:0.75rem;color:var(--text-secondary)" id="logCount">0</span>
+        <span class="arrow">▶</span>
+      </div>
+    </div>
+    <div class="log-content open" id="logContent">
+      <div class="log-inner" id="logInner"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">⚙️ 设置</span>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-section-title">📁 本地路径</div>
+      <div class="form-group">
+        <label class="form-label">转储目标目录</label>
+        <input class="form-input" id="setting_local_path" type="text" placeholder="D:/U盘转储">
+      </div>
+
+      <div class="settings-section-title">🔐 加密设置</div>
+      <div class="form-group">
+        <label class="form-label">加密密码 (留空则不加密)</label>
+        <input class="form-input" id="setting_password" type="password" placeholder="留空则不加密">
+      </div>
+
+      <div class="settings-section-title">🌐 FTP 服务器</div>
+      <div class="form-group">
+        <label class="form-label">FTP 主机地址</label>
+        <input class="form-input" id="setting_ftp_host" type="text" placeholder="192.168.1.100">
+      </div>
+      <div class="form-row form-group">
+        <div>
+          <label class="form-label">用户名</label>
+          <input class="form-input" id="setting_ftp_user" type="text" placeholder="anonymous">
+        </div>
+        <div>
+          <label class="form-label">端口</label>
+          <input class="form-input" id="setting_ftp_port" type="number" value="21">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">密码</label>
+        <input class="form-input" id="setting_ftp_pass" type="password" placeholder="留空保持不变">
+      </div>
+      <div class="form-group">
+        <label class="form-label">FTP 子路径</label>
+        <input class="form-input" id="setting_ftp_subpath" type="text" placeholder="/" value="/">
+      </div>
+      <div class="form-group">
+        <label class="form-check">
+          <input type="checkbox" id="setting_ftp_tls">
+          <span>使用 FTP-TLS (FTPS)</span>
+        </label>
+      </div>
+
+      <div class="settings-section-title">🎬 视频文件扩展名</div>
+      <div class="form-group">
+        <label class="form-label">文件扩展名 (回车添加)</label>
+        <div class="tag-input-container" id="tagContainer">
+          <input class="tag-input" id="tagInput" type="text" placeholder=".mp4">
+        </div>
+      </div>
+
+      <div class="settings-section-title">⚡ 其他选项</div>
+      <div class="form-group">
+        <label class="form-check">
+          <input type="checkbox" id="setting_auto_delete">
+          <span>上传完成后自动删除本地文件</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">最大并发上传数</label>
+        <input class="form-input" id="setting_max_concurrent" type="number" value="2" min="1" max="10">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeSettings()">取消</button>
+      <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div class="modal-overlay" id="helpModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">❓ 使用帮助</span>
+      <button class="modal-close" onclick="closeHelp()">✕</button>
+    </div>
+    <div class="modal-body help-content">
+      <h3>快速开始</h3>
+      <ul>
+        <li>插入 USB 设备后，设备卡片会自动显示</li>
+        <li>点击设备卡片的「开始复制」按钮开始复制视频文件</li>
+        <li>复制完成后，文件将自动进入 FTP 上传队列</li>
+      </ul>
+      <h3>WebSocket 连接</h3>
+      <ul>
+        <li>页面通过 WebSocket 与后端实时通信</li>
+        <li>连接断开时会自动重连（每 3 秒一次）</li>
+        <li>顶部状态指示灯显示当前连接状态</li>
+      </ul>
+      <h3>快捷键</h3>
+      <ul>
+        <li><code>Esc</code> - 关闭弹窗</li>
+        <li><code>S</code> - 打开设置</li>
+      </ul>
+      <h3>关于</h3>
+      <p>U盘自动转储工具 v1.0 — 配合 FastAPI 后端使用</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeHelp()">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+  // ===== STATE =====
+  const state = {
+    connected: false,
+    ws: null,
+    reconnectTimer: null,
+    settings: {
+      local_path: '',
+      encryption_password: '',
+      ftp: { host: '', port: 21, username: '', password: '', sub_path: '/', use_tls: false },
+      video_extensions: ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'],
+      auto_delete_local_after_upload: true,
+      max_concurrent_uploads: 2
+    },
+    usbDevices: [],
+    copyQueue: [],
+    uploadQueue: [],
+    logs: []
+  };
+
+  // ===== WEBSOCKET =====
+  const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+
+  function connectWS() {
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) return;
+
+    setStatus('connecting');
+
+    try {
+      state.ws = new WebSocket(WS_URL);
+
+      state.ws.onopen = () => {
+        state.connected = true;
+        setStatus('connected');
+        clearTimeout(state.reconnectTimer);
+        addLog('INFO', 'WebSocket 连接已建立');
+        requestState();
+      };
+
+      state.ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          handleMessage(msg);
+        } catch (err) {
+          console.error('消息解析失败:', err);
+        }
+      };
+
+      state.ws.onclose = () => {
+        state.connected = false;
+        setStatus('disconnected');
+        addLog('WARNING', 'WebSocket 连接已断开，正在重连...');
+        scheduleReconnect();
+      };
+
+      state.ws.onerror = () => {
+        state.connected = false;
+        setStatus('disconnected');
+      };
+    } catch (err) {
+      addLog('ERROR', 'WebSocket 连接失败: ' + err.message);
+      scheduleReconnect();
+    }
+  }
+
+  function scheduleReconnect() {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = setTimeout(connectWS, 3000);
+  }
+
+  function wsSend(data) {
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify(data));
+    }
+  }
+
+  function requestState() {
+    wsSend({ type: 'get_state' });
+  }
+
+  // ===== MESSAGE HANDLING =====
+  function handleMessage(msg) {
+    switch (msg.type) {
+      case 'state':
+        renderState(msg.data);
+        break;
+      case 'usb_devices':
+        state.usbDevices = msg.devices || [];
+        renderUsbCards();
+        break;
+      case 'copy_update':
+        updateCopyQueue(msg.queue);
+        break;
+      case 'upload_update':
+        updateUploadQueue(msg.queue);
+        break;
+      case 'copy_complete':
+        addLog('SUCCESS', `文件复制完成: ${msg.file}`);
+        break;
+      case 'upload_complete':
+        addLog('SUCCESS', `文件上传完成: ${msg.file}`);
+        break;
+      case 'upload_error':
+        addLog('ERROR', `上传失败: ${msg.file} — ${msg.error}`);
+        break;
+      case 'copy_error':
+        addLog('ERROR', `复制失败: ${msg.file} — ${msg.error}`);
+        break;
+      case 'usb_inserted':
+        addLog('INFO', `USB 设备已插入: ${msg.device.path}`);
+        state.usbDevices.push(msg.device);
+        renderUsbCards();
+        showToast('info', `USB 已插入: ${msg.device.path}`);
+        break;
+      case 'usb_removed':
+        addLog('INFO', `USB 设备已移除: ${msg.device.path}`);
+        state.usbDevices = state.usbDevices.filter(d => d.path !== msg.device.path);
+        renderUsbCards();
+        showToast('info', `USB 已移除: ${msg.device.path}`);
+        break;
+      case 'settings':
+        state.settings = { ...state.settings, ...msg.settings };
+        populateSettings();
+        break;
+      case 'pong':
+        break;
+      default:
+        console.log('未知消息类型:', msg.type);
+    }
+  }
+
+  function renderState(data) {
+    if (!data) return;
+    if (data.usb_devices) { state.usbDevices = data.usb_devices; renderUsbCards(); }
+    if (data.copy_queue) updateCopyQueue(data.copy_queue);
+    if (data.upload_queue) updateUploadQueue(data.upload_queue);
+    if (data.settings) { state.settings = { ...state.settings, ...data.settings }; populateSettings(); }
+  }
+
+  // ===== STATUS =====
+  function setStatus(status) {
+    const dot = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    dot.className = 'status-dot';
+    if (status === 'connected') {
+      dot.classList.add('connected');
+      text.textContent = '已连接';
+    } else if (status === 'connecting') {
+      dot.classList.add('connecting');
+      text.textContent = '连接中...';
+    } else {
+      text.textContent = '已断开';
+    }
+  }
+
+  // ===== USB CARDS =====
+  function renderUsbCards() {
+    const container = document.getElementById('usbCards');
+    document.getElementById('usbCount').textContent = state.usbDevices.length;
+
+    if (!state.usbDevices.length) {
+      container.innerHTML = `
+        <div class="queue-empty">
+          <div class="queue-empty-icon">🔌</div>
+          <div>等待连接 USB 设备...</div>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = state.usbDevices.map(device => {
+      const total = device.capacity || 1;
+      const used = device.used || 0;
+      const usedPct = Math.round((used / total) * 100);
+      const radius = 32;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference * (1 - usedPct / 100);
+
+      // Find copy progress for this device
+      const deviceCopyItems = state.copyQueue.filter(q => q.device_path === device.path && q.status !== 'completed' && q.status !== 'cancelled');
+      const currentItem = deviceCopyItems.find(q => q.status === 'copying');
+      const pendingCount = deviceCopyItems.filter(q => q.status === 'pending').length;
+      const totalForDevice = deviceCopyItems.length;
+      const completedForDevice = state.copyQueue.filter(q => q.device_path === device.path && q.status === 'completed').length;
+      const isCopying = !!currentItem;
+      const overallPct = totalForDevice > 0 ? Math.round(((completedForDevice + (isCopying ? (currentItem?.progress || 0) / 100 : 0)) / totalForDevice) * 100) : 0;
+      const copyProgressHtml = totalForDevice > 0 ? `
+        <div class="card-copy-progress">
+          <div class="card-copy-label">${isCopying ? '📋 正在复制: ' + escHtml(currentItem.filename) : '⏳ 等待复制...'}</div>
+          ${isCopying ? `
+          <div class="card-copy-info">
+            <span>${isCopying ? `(${completedForDevice + 1}/${totalForDevice})` : ''}</span>
+            <span class="card-copy-speed">${currentItem.speed ? formatSpeed(currentItem.speed) : ''}</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${Math.round(currentItem.progress || 0)}%"></div>
+          </div>
+          ` : ''}
+          <div class="card-copy-overall">
+            <span>总体进度</span>
+            <span class="overall-pct">${overallPct}%</span>
+          </div>
+        </div>
+      ` : '';
+
+      const copyBtnText = isCopying ? '🔄 复制中' : (totalForDevice > 0 ? '⏸ 暂停' : '📋 复制');
+
+      return `
+      <div class="usb-card ${isCopying ? 'active' : ''}" data-path="${device.path}" onclick="toggleCardActive(this)">
+        <div class="usb-card-header">
+          <span class="usb-icon">💾</span>
+          <span class="usb-label">${device.label || 'USB'}</span>
+        </div>
+        <div class="pie-container">
+          <svg class="pie-chart" viewBox="0 0 80 80">
+            <circle class="pie-bg" cx="40" cy="40" r="${radius}"/>
+            <circle class="pie-used" cx="40" cy="40" r="${radius}"
+              stroke-dasharray="${circumference}"
+              stroke-dashoffset="${offset}"/>
+          </svg>
+          <div class="pie-text">${usedPct}%</div>
+        </div>
+        <div class="usb-path">${device.path}</div>
+        <div class="usb-capacity">
+          已用 ${formatSize(used)} / ${formatSize(total)}
+        </div>
+        ${copyProgressHtml}
+        <div class="usb-card-actions">
+          <button class="btn btn-primary" onclick="event.stopPropagation(); startCopy('${device.path}')">${copyBtnText}</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function toggleCardActive(card) {
+    card.classList.toggle('active');
+  }
+
+  // ===== COPY QUEUE =====
+  function updateCopyQueue(queue) {
+    state.copyQueue = queue || [];
+    const container = document.getElementById('copyQueue');
+    const count = document.getElementById('copyCount');
+    const summary = document.getElementById('copySummary');
+    const summaryText = document.getElementById('copyProgressText');
+
+    count.textContent = state.copyQueue.length;
+
+    if (!state.copyQueue.length) {
+      container.innerHTML = `
+        <div class="queue-empty">
+          <div class="queue-empty-icon">📂</div>
+          <div>暂无复制任务</div>
+        </div>`;
+      summary.style.display = 'none';
+      renderUsbCards();
+      return;
+    }
+
+    const completed = state.copyQueue.filter(q => q.status === 'completed').length;
+    const total = state.copyQueue.length;
+    const activeItem = state.copyQueue.find(q => q.status === 'copying');
+    const pending = state.copyQueue.filter(q => q.status === 'pending').length;
+
+    container.innerHTML = state.copyQueue.map(item => {
+      const icon = item.status === 'completed' ? '✅' : item.status === 'error' ? '❌' : item.status === 'cancelled' ? '⏹️' : item.status === 'copying' ? '📋' : '⏳';
+      const cancelBtn = (item.status === 'copying' || item.status === 'pending')
+        ? `<button class="queue-item-cancel" onclick="cancelCopy('${item.id}')" title="取消">✕</button>`
+        : '';
+
+      if (item.status === 'completed' || item.status === 'cancelled') {
+        return `<div class="queue-item">
+          <span class="queue-item-icon">${icon}</span>
+          <span class="queue-item-name">${escHtml(item.filename)}</span>
+          <span class="queue-item-percent" style="color:${item.status === 'completed' ? 'var(--accent-green)' : 'var(--text-secondary)'}">${item.status === 'completed' ? '完成' : '已取消'}</span>
+        </div>`;
+      }
+
+      if (item.status === 'error') {
+        return `<div class="queue-item">
+          <span class="queue-item-icon">❌</span>
+          <span class="queue-item-name">${escHtml(item.filename)}</span>
+          <span class="queue-item-percent" style="color:var(--accent-red)">失败</span>
+          <button class="queue-item-cancel" onclick="cancelCopy('${item.id}')" title="移除">✕</button>
+        </div>`;
+      }
+
+      const currentIndex = state.copyQueue.filter(q => q.status === 'completed' || q.status === 'copying' && q !== item).length + 1;
+
+      return `<div class="queue-item">
+        <span class="queue-item-icon">${icon}</span>
+        <span class="queue-item-name">${escHtml(item.filename)}</span>
+        ${item.status === 'copying' && item.speed ? `<span style="font-size:0.7rem;color:var(--accent-green);font-family:Consolas,monospace;margin-left:2px">${formatSpeed(item.speed)}/s</span>` : ''}
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${Math.round(item.progress || 0)}%"></div>
+        </div>
+        <span class="queue-item-percent">${Math.round(item.progress || 0)}%</span>
+        ${cancelBtn}
+      </div>`;
+    }).join('');
+
+    summary.style.display = total > 0 ? 'flex' : 'none';
+    const activeText = activeItem ? `  |  当前: ${activeItem.filename}` : '';
+    summaryText.textContent = `已完成 ${completed}/${total}${activeText}`;
+
+    renderUsbCards();
+  }
+
+  // ===== UPLOAD QUEUE =====
+  function updateUploadQueue(queue) {
+    state.uploadQueue = queue || [];
+    const container = document.getElementById('uploadQueue');
+    const count = document.getElementById('uploadCount');
+    const summary = document.getElementById('uploadSummary');
+    const summaryText = document.getElementById('uploadProgressText');
+
+    count.textContent = state.uploadQueue.length;
+
+    if (!state.uploadQueue.length) {
+      container.innerHTML = `
+        <div class="queue-empty">
+          <div class="queue-empty-icon">☁️</div>
+          <div>暂无上传任务</div>
+        </div>`;
+      summary.style.display = 'none';
+      return;
+    }
+
+    const pending = state.uploadQueue.filter(q => q.status === 'pending').length;
+    const active = state.uploadQueue.filter(q => q.status === 'uploading').length;
+    const doneCount = state.uploadQueue.filter(q => q.status === 'done').length;
+    const errorCount = state.uploadQueue.filter(q => q.status === 'error').length;
+    const total = state.uploadQueue.length;
+
+    // Calculate total upload speed
+    const uploadingItems = state.uploadQueue.filter(q => q.status === 'uploading');
+    const totalSpeed = uploadingItems.reduce((sum, q) => sum + (q.speed || 0), 0);
+    const speedStr = totalSpeed > 0 ? formatSpeed(totalSpeed) : '';
+
+    // Stats bar
+    const statsBar = `
+      <div class="upload-stats-bar">
+        <span class="stat stat-pending"><span class="stat-value">${pending}</span> 待上传</span>
+        <span class="upload-stats-sep">|</span>
+        <span class="stat stat-active"><span class="stat-value">${active}</span> 上传中</span>
+        <span class="upload-stats-sep">|</span>
+        <span class="stat stat-done"><span class="stat-value">${doneCount}</span> 已完成</span>
+        ${errorCount > 0 ? `<span class="upload-stats-sep">|</span><span class="stat stat-error"><span class="stat-value">${errorCount}</span> 失败</span>` : ''}
+        ${speedStr ? `<span class="upload-speed">⚡ ${speedStr}/s</span>` : ''}
+      </div>`;
+
+    container.innerHTML = statsBar + state.uploadQueue.map(item => {
+      const statusClass = item.status === 'done' ? 'done' : item.status === 'uploading' ? 'uploading' : item.status === 'error' ? 'error' : 'pending';
+
+      if (item.status === 'done') {
+        return `<div class="upload-item">
+          <span class="queue-item-icon">✅</span>
+          <span class="queue-item-name">${escHtml(item.filename)}</span>
+          <span class="upload-status done">✓ 已上传</span>
+        </div>`;
+      }
+
+      if (item.status === 'error') {
+        return `<div class="upload-item">
+          <span class="queue-item-icon">❌</span>
+          <span class="queue-item-name">${escHtml(item.filename)}</span>
+          <span class="upload-status error">✕ 失败</span>
+          <button class="queue-item-cancel" onclick="retryUpload('${item.id}')" title="重试">↻</button>
+        </div>`;
+      }
+
+      if (item.status === 'pending') {
+        return `<div class="upload-item">
+          <span class="queue-item-icon">⏳</span>
+          <span class="queue-item-name">${escHtml(item.filename)}</span>
+          <span class="upload-status pending">等待中...</span>
+          <button class="queue-item-cancel" onclick="cancelUpload('${item.id}')" title="取消">✕</button>
+        </div>`;
+      }
+
+      // uploading
+      return `<div class="upload-item">
+        <span class="queue-item-icon">📤</span>
+        <span class="queue-item-name">${escHtml(item.filename)}</span>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${Math.round(item.progress || 0)}%"></div>
+        </div>
+        <span class="queue-item-percent" style="color:var(--accent-blue)">${Math.round(item.progress || 0)}%</span>
+        ${item.speed ? `<span style="font-size:0.7rem;color:var(--accent-green);font-family:Consolas,monospace;margin-left:2px">${formatSpeed(item.speed)}/s</span>` : ''}
+        <button class="queue-item-cancel" onclick="cancelUpload('${item.id}')" title="取消">✕</button>
+      </div>`;
+    }).join('');
+
+    summary.style.display = total > 0 ? 'flex' : 'none';
+    summaryText.textContent = `已完成 ${doneCount}/${total}`;
+  }
+
+  // ===== LOGGING =====
+  function addLog(level, message) {
+    const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    state.logs.unshift({ time, level, message });
+    if (state.logs.length > 500) state.logs.pop();
+    renderLogs();
+  }
+
+  function renderLogs() {
+    const inner = document.getElementById('logInner');
+    const countEl = document.getElementById('logCount');
+    countEl.textContent = state.logs.length;
+
+    inner.innerHTML = state.logs.slice(0, 200).map(log =>
+      `<div class="log-entry">
+        <span class="log-time">${log.time}</span>
+        <span class="log-level ${log.level}">[${log.level}]</span>
+        <span class="log-msg">${escHtml(log.message)}</span>
+      </div>`
+    ).join('');
+  }
+
+  function toggleLog() {
+    const toggle = document.querySelector('.log-toggle');
+    const content = document.getElementById('logContent');
+    toggle.classList.toggle('open');
+    content.classList.toggle('open');
+  }
+
+  // ===== ACTIONS =====
+  function startCopy(devicePath) {
+    wsSend({ type: 'start_copy', device_path: devicePath });
+    addLog('INFO', `开始复制设备 ${devicePath} 中的视频文件`);
+  }
+
+  function cancelCopy(id) {
+    wsSend({ type: 'cancel_copy', id });
+    addLog('INFO', `已请求取消复制任务 ${id}`);
+  }
+
+  function cancelAllCopy() {
+    wsSend({ type: 'cancel_all_copy' });
+    addLog('INFO', '已请求取消所有复制任务');
+  }
+
+  function cancelUpload(id) {
+    wsSend({ type: 'cancel_upload', id });
+    addLog('INFO', `已请求取消上传任务 ${id}`);
+  }
+
+  function cancelAllUpload() {
+    wsSend({ type: 'cancel_all_upload' });
+    addLog('INFO', '已请求取消所有上传任务');
+  }
+
+  function retryUpload(id) {
+    wsSend({ type: 'retry_upload', id });
+    addLog('INFO', `已请求重试上传任务 ${id}`);
+  }
+
+  // ===== SETTINGS =====
+  function openSettings() {
+    populateSettings();
+    document.getElementById('settingsModal').classList.add('active');
+  }
+
+  function closeSettings() {
+    document.getElementById('settingsModal').classList.remove('active');
+  }
+
+  function populateSettings() {
+    const s = state.settings;
+    document.getElementById('setting_local_path').value = s.local_path || '';
+    document.getElementById('setting_password').value = s.encryption_password || '';
+    document.getElementById('setting_ftp_host').value = s.ftp?.host || '';
+    document.getElementById('setting_ftp_port').value = s.ftp?.port || 21;
+    document.getElementById('setting_ftp_user').value = s.ftp?.username || '';
+    document.getElementById('setting_ftp_pass').value = '';
+    document.getElementById('setting_ftp_subpath').value = s.ftp?.sub_path || '/';
+    document.getElementById('setting_ftp_tls').checked = s.ftp?.use_tls || false;
+    document.getElementById('setting_auto_delete').checked = s.auto_delete_local_after_upload || false;
+    document.getElementById('setting_max_concurrent').value = s.max_concurrent_uploads || 2;
+
+    renderTags();
+  }
+
+  function renderTags() {
+    const container = document.getElementById('tagContainer');
+    const input = document.getElementById('tagInput');
+    const extensions = state.settings.video_extensions || [];
+
+    const tagsHtml = extensions.map(ext =>
+      `<span class="tag">${escHtml(ext)}<span class="tag-remove" onclick="removeTag('${escHtml(ext)}')">✕</span></span>`
+    ).join('');
+
+    container.innerHTML = tagsHtml + '<input class="tag-input" id="tagInput" type="text" placeholder="回车添加">';
+    document.getElementById('tagInput').addEventListener('keydown', handleTagInput);
+  }
+
+  function handleTagInput(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = e.target.value.trim().toLowerCase();
+      if (val && !val.startsWith('.')) {
+        val = '.' + val;
+      }
+      if (val && !state.settings.video_extensions.includes(val)) {
+        state.settings.video_extensions.push(val);
+        renderTags();
+      }
+      e.target.value = '';
+    }
+  }
+
+  function removeTag(ext) {
+    state.settings.video_extensions = state.settings.video_extensions.filter(t => t !== ext);
+    renderTags();
+  }
+
+  function saveSettings() {
+    const settings = {
+      local_path: document.getElementById('setting_local_path').value,
+      encryption_password: document.getElementById('setting_password').value,
+      ftp: {
+        host: document.getElementById('setting_ftp_host').value,
+        port: parseInt(document.getElementById('setting_ftp_port').value) || 21,
+        username: document.getElementById('setting_ftp_user').value,
+        password: document.getElementById('setting_ftp_pass').value,
+        sub_path: document.getElementById('setting_ftp_subpath').value || '/',
+        use_tls: document.getElementById('setting_ftp_tls').checked
+      },
+      video_extensions: state.settings.video_extensions,
+      auto_delete_local_after_upload: document.getElementById('setting_auto_delete').checked,
+      max_concurrent_uploads: parseInt(document.getElementById('setting_max_concurrent').value) || 2
+    };
+
+    wsSend({ type: 'save_settings', settings });
+    state.settings = { ...state.settings, ...settings };
+    closeSettings();
+    addLog('INFO', '设置已保存');
+    showToast('success', '设置已保存');
+  }
+
+  // ===== HELP =====
+  function openHelp() {
+    document.getElementById('helpModal').classList.add('active');
+  }
+
+  function closeHelp() {
+    document.getElementById('helpModal').classList.remove('active');
+  }
+
+  // ===== TOAST =====
+  function showToast(type, message) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+    toast.innerHTML = `<span>${icon}</span><span>${escHtml(message)}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+  }
+
+  // ===== UTILS =====
+  function formatSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  function formatSpeed(bytesPerSec) {
+    return formatSize(bytesPerSec);
+  }
+
+  function escHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ===== KEYBOARD =====
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeSettings();
+      closeHelp();
+    }
+    if (e.key === 's' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+      e.preventDefault();
+      openSettings();
+    }
+  });
+
+  // ===== MODAL CLICK OUTSIDE =====
+  document.getElementById('settingsModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('settingsModal')) closeSettings();
+  });
+  document.getElementById('helpModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('helpModal')) closeHelp();
+  });
+
+  // ===== HEARTBEAT =====
+  setInterval(() => {
+    if (state.connected) {
+      wsSend({ type: 'ping' });
+    }
+  }, 30000);
+
+  // ===== INIT =====
+  connectWS();
+  addLog('INFO', 'USB 自动转储工具前端已初始化');
+  </script>
+</body>
+</html>

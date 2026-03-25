@@ -1,0 +1,13 @@
+{
+    ".url": {
+        "usb-autodump.Application": {
+            "title": "U盘自动转储",
+            "icon": "images/icon_{0}.png",
+            "type": "url",
+            "protocol": "http",
+            "port": "{port}",
+            "url": "/web_frontend/",
+            "allUsers": false
+        }
+    }
+}

@@ -1,0 +1,31 @@
+{
+    "port": {
+        "port": 8765
+    },
+    "data-share":
+    {
+        "shares":
+        [
+            {
+                "name": "usb-autodump",
+                "permission":
+                {
+                    "rw":
+                    [
+                        "usb-autodump"
+                    ]
+                }
+            },
+            {
+                "name": "usb-autodump/data",
+                "permission":
+                {
+                    "rw":
+                    [
+                        "usb-autodump"
+                    ]
+                }
+            }
+        ]
+    }
+}
