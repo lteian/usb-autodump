@@ -1,0 +1,28 @@
+{
+  "local_path": "D:/U盘转储",
+  "ftp": {
+    "host": "",
+    "port": 21,
+    "username": "",
+    "password": "",
+    "sub_path": "/",
+    "use_tls": false,
+    "max_retry": 3
+  },
+  "video_extensions": [
+    ".mp4",
+    ".avi",
+    ".mkv",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".webm",
+    ".m4v",
+    ".mpg",
+    ".mpeg"
+  ],
+  "auto_delete_local_after_upload": true,
+  "auto_format_after_copy": false,
+  "max_concurrent_uploads": 2,
+  "usb_paths": {}
+}
