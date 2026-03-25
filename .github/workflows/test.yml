@@ -1,0 +1,13 @@
+name: Test Workflow
+on:
+  push:
+    branches: [cpp]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - run: echo "Hello"
+      - uses: actions/checkout@v4
+      - run: echo "Checked out"
