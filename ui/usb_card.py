@@ -115,6 +115,14 @@ class USBCard(QFrame):
         self.copy_count_label.setVisible(False)
         layout.addWidget(self.copy_count_label)
 
+        # 当前复制文件名
+        self.current_file_label = QLabel("")
+        self.current_file_label.setStyleSheet("color: #808080; font-size: 10px;")
+        self.current_file_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.current_file_label.setVisible(False)
+        self.current_file_label.setWordWrap(True)
+        layout.addWidget(self.current_file_label)
+
         # 按钮行
         btn_layout = QHBoxLayout()
         self.format_btn = QPushButton("格式化")
@@ -151,6 +159,7 @@ class USBCard(QFrame):
         self.format_btn.setVisible(False)
         self.eject_btn.setVisible(False)
         self.copy_count_label.setVisible(False)
+        self.current_file_label.setVisible(False)
 
         if status == self.STATUS_IDLE:
             self.status_label.setText("空闲")
@@ -170,11 +179,17 @@ class USBCard(QFrame):
             self.status_label.setText("格式化中...")
             self.status_label.setStyleSheet("color: #F44336; font-size: 11px;")
 
+    def set_current_file(self, filename: str):
+        self.current_file_label.setText(filename)
+        self.current_file_label.setToolTip(filename)
+        self.current_file_label.setVisible(True)
+
     def update_copy_progress(self, current: int, total: int, file_progress: float):
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(current)
         self.copy_count_label.setText(f"{current}/{total} ({file_progress:.0f}%)")
         self.copy_count_label.setVisible(True)
+        self.current_file_label.setVisible(True)
 
     def clear(self):
         self._drive_letter = ""
@@ -185,6 +200,7 @@ class USBCard(QFrame):
         self.progress_bar.setVisible(False)
         self.progress_bar.setValue(0)
         self.copy_count_label.setVisible(False)
+        self.current_file_label.setVisible(False)
         self.format_btn.setVisible(False)
         self.eject_btn.setVisible(False)
         self.cancel_btn.setVisible(False)
