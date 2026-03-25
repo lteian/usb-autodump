@@ -7,6 +7,10 @@
 #include <QTableWidget>
 #include <QTimer>
 #include <QList>
+#include <QTableWidget>
+
+#include "copy_engine.h"
+#include "ftp_uploader.h"
 
 class USBCard;
 class USBMonitor;
