@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-DB_PATH = Path(__file__).parent.parent / "file_records.db"
+DB_PATH = Path.home() / ".local" / "share" / "usb_autodump" / "file_records.db"
 _local = threading.local()
 
 

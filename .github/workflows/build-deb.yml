@@ -1,0 +1,56 @@
+name: Build Linux DEB (统信/麒麟)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip python3-pyudev fpm
+
+      - name: Install Python packages
+        run: |
+          pip install PyQt6 cryptography pyinstaller
+
+      - name: Build Linux executable
+        run: |
+          pyinstaller --onefile --name "usb-autodump" main.py
+          mkdir -p dist/deb_root/usr/local/bin
+          cp dist/usb-autodump dist/deb_root/usr/local/bin/
+
+      - name: Create DEB package
+        run: |
+          fpm -s dir -t deb \
+            -n usb-autodump \
+            -v 1.0.0 \
+            --epoch 1 \
+            --vendor "lteian" \
+            --maintainer "lteian" \
+            --description "USB自动转储工具 - 支持统信UOS/麒麟Kylin" \
+            --category Utility \
+            -f dist/deb_root \
+            -p dist/usb-autodump_1.0.0_amd64.deb
+
+      - name: Upload DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: usb-autodump-DEB
+          path: dist/usb-autodump_1.0.0_amd64.deb
+          retention-days: 30
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/usb-autodump_1.0.0_amd64.deb
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

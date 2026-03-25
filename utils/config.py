@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from utils.crypto import encrypt, decrypt
 
-CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+CONFIG_PATH = Path.home() / ".config" / "usb_autodump" / "config.json"
 
 _default_config = {
     "local_path": "D:/U盘转储",

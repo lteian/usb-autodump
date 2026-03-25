@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+LOG_DIR = Path.home() / ".local" / "logs" / "usb_autodump"
 
 
 def setup_logger(name: str = "usb_autodump") -> logging.Logger:
