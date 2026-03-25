@@ -13,24 +13,36 @@ USB 自动检测、视频文件转储、FTP 上传的 Windows/Linux 桌面工具
 - ⚙️ **U盘专属路径** - 每个盘符可配置不同的本地存放路径
 - 💿 **格式化/弹出** - 复制完成后可一键格式化或弹出 U 盘
 
+---
+
 ## 首次使用
 
-### 第一步：设置加密密码
+### 1. 设置加密密码
 
-**首次运行时，软件会强制弹出密码设置对话框。**
+打开 **设置 ⚙** → 在顶部找到 **🔐 加密密码** 输入框设置密码。
 
-此密码用于加密你的 FTP 密码，请务必妥善保管。遗忘后将无法解密已保存的 FTP 密码。
+此密码用于加密你的 FTP 密码，**请务必牢记**。
 
-### 第二步：配置 FTP（设置 ⚙ 按钮）
+> ⚠️ 遗忘加密密码将导致无法解密已保存的 FTP 密码。
 
-- 服务器地址 / 端口 / 用户名 / 密码
-- 子路径（上传到 FTP 的哪个目录）
-- 如需 TLS 加密，勾选对应选项
+### 2. 配置 FTP
 
-### 第三步：设置本地路径（可选）
+设置好加密密码后，填写 FTP 服务器地址、端口、用户名、密码、子路径。
 
-- 默认路径：D:/U盘转储
-- 可为每个 U 盘盘符配置专属路径
+### 3. 设置本地路径（可选）
+
+- 默认路径：`D:/U盘转储`
+- 可为每个 U 盘盘符配置不同的本地存放路径
+
+---
+
+## 忘记密码怎么办？
+
+打开 **设置 ⚙** → 点击底部 **🔑 忘记密码？重置所有配置**
+
+此操作会**清空所有配置**（加密密码、FTP 密码、文件记录），请谨慎操作。
+
+---
 
 ## 安装
 
@@ -46,14 +58,6 @@ sudo dpkg -i usb-autodump_1.0.0_amd64.deb
 usb-autodump
 ```
 
-## 依赖
-
-- Python 3.10+
-- PyQt6
-- pywin32（Windows USB 检测）
-- cryptography（AES-256 加密）
-- pyudev（Linux USB 检测）
-
 ## 从源码运行
 
 ```bash
@@ -65,6 +69,7 @@ python main.py
 
 ### Windows EXE
 ```bash
+pip install pyinstaller
 pyinstaller --onefile --windowed main.py
 ```
 
@@ -77,10 +82,11 @@ fpm -s dir -t deb -n usb-autodump -v 1.0.0 \
   -f dist/deb_root
 ```
 
-## 目录结构
+## 配置存放位置
 
-```
-~/.config/usb_autodump/config.json   # 配置文件（含加密后的FTP密码）
-~/.local/share/usb_autodump/         # SQLite 数据库
-~/.local/logs/usb_autodump/          # 日志文件
-```
+| 平台 | 配置文件 | SQLite 数据库 |
+|------|---------|--------------|
+| Windows | `%USERPROFILE%\.config\usb_autodump\config.json` | `%USERPROFILE%\.local\share\usb_autodump\file_records.db` |
+| Linux | `~/.config/usb_autodump/config.json` | `~/.local/share/usb_autodump/file_records.db` |
+
+日志文件：`~/.local/logs/usb_autodump/`

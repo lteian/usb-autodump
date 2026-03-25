@@ -22,7 +22,7 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --name "USB自动转储工具" main.py
+          pyinstaller main.spec
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4

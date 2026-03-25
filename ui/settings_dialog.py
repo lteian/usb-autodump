@@ -3,81 +3,12 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QGroupBox, QFormLayout, QFileDialog, QMessageBox,
                              QTableWidget, QTableWidgetItem, QHeaderView)
 from PyQt6.QtCore import Qt
-from utils.config import (load_config, save_config, is_password_set,
-                          set_encryption_password, get_encryption_password)
+from utils.config import (load_config, save_config, get_encryption_password,
+                          set_encryption_password)
 from utils.logger import get_logger
+import os
 
 logger = get_logger()
-
-
-class SetupPasswordDialog(QDialog):
-    """首次启动强制设置加密密码"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("🔐 首次设置")
-        self.setMinimumWidth(420)
-        self.setModal(True)
-        self.setStyleSheet("""
-            QDialog { background: #1e1e1e; color: #e0e0e0; }
-            QLabel { color: #e0e0e0; }
-            QLineEdit { background: #2d2d2d; color: #e0e0e0; border: 1px solid #4a4a4a; padding: 6px; border-radius: 4px; }
-            QPushButton { background: #424242; color: white; border: none; border-radius: 4px; padding: 8px 20px; }
-            QPushButton:hover { background: #616161; }
-        """)
-        self._password = ""
-        self._setup_ui()
-
-    def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(
-            "<b>请设置加密密码</b><br/><br/>"
-            "此密码用于加密你的 FTP 密码，请妥善保管。<br/>"
-            "遗忘后将无法解密已保存的 FTP 密码。"
-        ))
-        layout.addSpacing(10)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("加密密码:"))
-        self.pwd_edit = QLineEdit()
-        self.pwd_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.pwd_edit.setPlaceholderText("设置你的加密密码")
-        row.addWidget(self.pwd_edit)
-        layout.addLayout(row)
-
-        row2 = QHBoxLayout()
-        row2.addWidget(QLabel("确认密码:"))
-        self.pwd2_edit = QLineEdit()
-        self.pwd2_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.pwd2_edit.setPlaceholderText("再次输入密码")
-        row2.addWidget(self.pwd2_edit)
-        layout.addLayout(row2)
-
-        self.err_label = QLabel("")
-        self.err_label.setStyleSheet("color: #F44336;")
-        layout.addWidget(self.err_label)
-
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        self.ok_btn = QPushButton("确认")
-        self.ok_btn.clicked.connect(self._on_ok)
-        btn_layout.addWidget(self.ok_btn)
-        layout.addLayout(btn_layout)
-
-    def _on_ok(self):
-        p1 = self.pwd_edit.text()
-        p2 = self.pwd2_edit.text()
-        if len(p1) < 4:
-            self.err_label.setText("密码至少4个字符")
-            return
-        if p1 != p2:
-            self.err_label.setText("两次输入的密码不一致")
-            return
-        self._password = p1
-        self.accept()
-
-    def get_password(self) -> str:
-        return self._password
 
 
 class SettingsDialog(QDialog):
@@ -85,6 +16,10 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("⚙ 设置")
         self.setMinimumWidth(540)
+        self._config = load_config()
+        self._setup_ui()
+
+    def _setup_ui(self):
         self.setStyleSheet("""
             QDialog { background: #1e1e1e; color: #e0e0e0; }
             QLabel { color: #e0e0e0; }
@@ -98,22 +33,49 @@ class SettingsDialog(QDialog):
             QPushButton { background: #424242; color: white; border: none; border-radius: 4px; padding: 6px 12px; }
             QPushButton:hover { background: #616161; }
         """)
-        self._config = load_config()
-        self._enc_pwd = get_encryption_password()
-        self._setup_ui()
 
-    def _setup_ui(self):
         layout = QVBoxLayout(self)
 
-        # ── 加密密码（可修改）──────────────────────────────
+        # ── 加密密码（顶部警告）─────────────────────────────
+        enc_pwd = get_encryption_password()
+        if not enc_pwd:
+            warn = QLabel(
+                "⚠️ 请先设置加密密码（用于加密 FTP 密码）"
+            )
+            warn.setStyleSheet("""
+                background: #FF9800;
+                color: #1e1e1e;
+                padding: 10px 14px;
+                border-radius: 6px;
+                font-weight: bold;
+            """)
+            layout.addWidget(warn)
+
         pwd_group = QGroupBox("🔐 加密密码")
-        pwd_layout = QHBoxLayout()
-        pwd_layout.addWidget(QLabel("当前加密密码:"))
+        pwd_layout = QVBoxLayout()
+
+        row1 = QHBoxLayout()
+        row1.addWidget(QLabel("设置/修改加密密码:"))
         self.enc_pwd_edit = QLineEdit()
         self.enc_pwd_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.enc_pwd_edit.setPlaceholderText("留空保持不变，输入则修改密码")
-        self.enc_pwd_edit.setText("")
-        pwd_layout.addWidget(self.enc_pwd_edit)
+        self.enc_pwd_edit.setPlaceholderText(
+            "留空保持不变，输入则修改密码（至少4字符）"
+        )
+        row1.addWidget(self.enc_pwd_edit)
+        pwd_layout.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel("确认密码:"))
+        self.enc_pwd2_edit = QLineEdit()
+        self.enc_pwd2_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.enc_pwd2_edit.setPlaceholderText("再次输入以确认")
+        row2.addWidget(self.enc_pwd2_edit)
+        pwd_layout.addLayout(row2)
+
+        self.enc_error = QLabel("")
+        self.enc_error.setStyleSheet("color: #F44336;")
+        pwd_layout.addWidget(self.enc_error)
+
         pwd_group.setLayout(pwd_layout)
         layout.addWidget(pwd_group)
 
@@ -195,7 +157,23 @@ class SettingsDialog(QDialog):
         adv_group.setLayout(adv_layout)
         layout.addWidget(adv_group)
 
-        # ── 按钮 ─────────────────────────────────────────
+        # ── 忘记密码 ─────────────────────────────────────
+        reset_btn = QPushButton("🔑 忘记密码？重置所有配置")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background: #b71c1c;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-size: 12px;
+            }
+            QPushButton:hover { background: #c62828; }
+        """)
+        reset_btn.clicked.connect(self._on_reset)
+        layout.addWidget(reset_btn)
+
+        # ── 底部按钮 ─────────────────────────────────────
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         self.cancel_btn = QPushButton("取消")
@@ -208,13 +186,68 @@ class SettingsDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _browse_local_path(self):
-        path = QFileDialog.getExistingDirectory(self, "选择默认本地存储路径",
-                                                self.local_path_edit.text())
+        path = QFileDialog.getExistingDirectory(
+            self, "选择默认本地存储路径", self.local_path_edit.text())
         if path:
             self.local_path_edit.setText(path)
 
+    def _on_reset(self):
+        reply = QMessageBox.question(
+            self, "⚠️ 确认重置",
+            "确定要重置所有配置吗？\n\n"
+            "此操作将：\n"
+            "• 删除加密密码\n"
+            "• 删除 FTP 配置\n"
+            "• 删除所有已保存的记录\n\n"
+            "此操作不可恢复！",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            from pathlib import Path
+            cfg_path = Path.home() / ".config" / "usb_autodump" / "config.json"
+            db_path = Path.home() / ".local" / "share" / "usb_autodump" / "file_records.db"
+            for p in [cfg_path, db_path]:
+                if p.exists():
+                    p.unlink()
+                    logger.info(f"已删除: {p}")
+            QMessageBox.information(self, "已重置",
+                                    "配置已清空，请重启程序。")
+            logger.info("用户重置所有配置")
+            self.accept()
+            import sys
+            sys.exit(0)
+        except Exception as e:
+            QMessageBox.critical(self, "重置失败", f"清空配置失败:\n{e}")
+
     def _save(self):
-        # 收集U盘专属路径
+        # 验证加密密码
+        new_pwd = self.enc_pwd_edit.text().strip()
+        confirm_pwd = self.enc_pwd2_edit.text().strip()
+        old_enc_pwd = get_encryption_password()
+
+        if new_pwd:
+            if len(new_pwd) < 4:
+                self.enc_error.setText("密码至少4个字符")
+                return
+            if new_pwd != confirm_pwd:
+                self.enc_error.setText("两次输入的密码不一致")
+                return
+            enc_pwd_to_save = new_pwd
+        else:
+            enc_pwd_to_save = old_enc_pwd
+
+        # 如果有 FTP 密码要存，但没有设置加密密码 → 报错
+        ftp_pwd_input = self.ftp_pass_edit.text().strip()
+        has_ftp_pwd = bool(ftp_pwd_input)
+        if has_ftp_pwd and not enc_pwd_to_save:
+            self.enc_error.setText("请先设置加密密码才能保存 FTP 密码")
+            return
+
+        # 收集 U 盘专属路径
         usb_paths = {}
         for row in range(self.usb_paths_table.rowCount()):
             d_item = self.usb_paths_table.item(row, 0)
@@ -225,21 +258,6 @@ class SettingsDialog(QDialog):
                     drive += ":"
                 usb_paths[drive] = p_item.text().strip()
 
-        # 密码处理
-        new_enc_pwd = self.enc_pwd_edit.text().strip()
-        old_enc_pwd = self._enc_pwd
-        enc_pwd_to_save = old_enc_pwd if not new_enc_pwd else new_enc_pwd
-
-        # 如果修改了加密密码，需要重新加密 FTP 密码
-        re_encrypt = bool(new_enc_pwd)
-        old_ftp_password = self._config.get("ftp", {}).get("password", "")
-        new_ftp_password = self.ftp_pass_edit.text().strip()
-        ftp_password = new_ftp_password if new_ftp_password else old_ftp_password
-
-        if not enc_pwd_to_save:
-            QMessageBox.warning(self, "错误", "加密密码不能为空！")
-            return
-
         self._config["encryption_password"] = enc_pwd_to_save
         self._config["local_path"] = self.local_path_edit.text().strip()
         self._config["usb_paths"] = usb_paths
@@ -247,7 +265,7 @@ class SettingsDialog(QDialog):
             "host": self.ftp_host_edit.text().strip(),
             "port": self.ftp_port_spin.value(),
             "username": self.ftp_user_edit.text().strip(),
-            "password": ftp_password,
+            "password": ftp_pwd_input or self._config.get("ftp", {}).get("password", ""),
             "sub_path": self.ftp_subpath_edit.text().strip().rstrip("/"),
             "use_tls": self.ftp_tls_check.isChecked(),
             "max_retry": self.retry_spin.value()
@@ -263,14 +281,3 @@ class SettingsDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "保存失败", f"保存配置失败:\n{e}")
-
-
-def require_password_setup(parent=None) -> bool:
-    """强制弹出密码设置对话框，返回是否已设置"""
-    dlg = SetupPasswordDialog(parent)
-    if dlg.exec() == QDialog.DialogCode.Accepted:
-        pwd = dlg.get_password()
-        if pwd:
-            set_encryption_password(pwd)
-            return True
-    return False

@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Python deps
+      - name: Install deps
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-pip python3-pyudev ruby ruby-dev rubygems
@@ -21,13 +21,27 @@ jobs:
         run: |
           pip install PyQt6 cryptography pyinstaller
 
-      - name: Build Linux executable
+      - name: Build executable
         run: |
           pyinstaller --onefile --name "usb-autodump" main.py
-          mkdir -p dist/deb_root/usr/local/bin
-          cp dist/usb-autodump dist/deb_root/usr/local/bin/
+          mkdir -p dist/deb_root/usr/local/bin/
+          mkdir -p dist/deb_root/usr/share/applications/
+          mkdir -p dist/deb_root/usr/share/icons/hicolor/256x256/apps/
+          cp dist/usb-autodump dist/deb_root/usr/local/bin/usb-autodump
+          cp linux/usb-autodump.desktop dist/deb_root/usr/share/applications/
 
-      - name: Create DEB package
+          # 生成一个简单 PNG icon（256x256 橙色方块）
+          python3 -c "
+from PIL import Image, ImageDraw
+img = Image.new('RGB', (256, 256), color='#1e1e1e')
+draw = ImageDraw.Draw(img)
+draw.ellipse([30, 30, 226, 226], fill='#FF9800', outline='#e65100', width=4)
+draw.rectangle([100, 80, 156, 110], fill='white')
+draw.rectangle([100, 115, 156, 140], fill='white')
+img.save('dist/deb_root/usr/share/icons/hicolor/256x256/apps/usb-autodump.png')
+" 2>/dev/null || echo "PIL not available, skipping icon"
+
+      - name: Package DEB
         run: |
           fpm -s dir -t deb \
             -n usb-autodump \

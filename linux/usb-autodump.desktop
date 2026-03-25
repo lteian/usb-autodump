@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=USB自动转储工具
+Comment=USB U盘自动检测、视频转储、FTP上传工具
+Exec=/usr/local/bin/usb-autodump
+Icon=usb-autodump
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=USB;U盘;转储;FTP;
+StartupNotify=true
