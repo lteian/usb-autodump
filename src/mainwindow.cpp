@@ -19,6 +19,10 @@
 #include <QHeaderView>
 #include <QScrollArea>
 #include <QDebug>
+#include <QLineEdit>
+#include <QInputDialog>
+#include <QMessageBox>
+#include <QGroupBox>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -320,26 +324,27 @@ void MainWindow::refreshPendingList() {
     }
 }
 
+QString MainWindow::formatSize(qint64 b) {
+    if (b >= 1024*1024*1024) return QString::number(b/1024.0/1024/1024,'f',1) + "GB";
+    if (b >= 1024*1024) return QString::number(b/1024.0/1024,'f',1) + "MB";
+    if (b >= 1024) return QString::number(b/1024.0,'f',1) + "KB";
+    return QString::number(b) + "B";
+}
+
 void MainWindow::updateStatusBar() {
     // Only refresh pending list every 10 seconds to avoid DB overhead
     static int tick = 0;
     if (++tick % 5 == 0) {
         refreshPendingList();
     }
+    auto pending = FileRecordDB::instance().pendingCountAndSize();
     auto uploaded = FileRecordDB::instance().uploadedCountAndSize();
     int queue = m_ftpUploader ? m_ftpUploader->queueSize() : 0;
 
-    QString fmt = [](qint64 b) {
-        if (b >= 1024*1024*1024) return QString::number(b/1024.0/1024/1024,'f',1) + "GB";
-        if (b >= 1024*1024) return QString::number(b/1024.0/1024,'f',1) + "MB";
-        if (b >= 1024) return QString::number(b/1024.0,'f',1) + "KB";
-        return QString::number(b) + "B";
-    };
-
     statusBar()->showMessage(
         QString("  待上传: %1个 (%2)  |  已上传: %3个 (%4)  |  队列: %5")
-            .arg(pending.first).arg(fmt(pending.second))
-            .arg(uploaded.first).arg(fmt(uploaded.second))
+            .arg(pending.first).arg(formatSize(pending.second))
+            .arg(uploaded.first).arg(formatSize(uploaded.second))
             .arg(queue)
     );
 }
