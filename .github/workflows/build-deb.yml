@@ -2,7 +2,7 @@ name: Build Linux DEB (统信/麒麟)
 
 on:
   push:
-    branches: [main]
+    branches: [main, web-version]
   workflow_dispatch:
 
 jobs:
@@ -34,12 +34,12 @@ jobs:
         run: |
           fpm -s dir -t deb \
             -n usb-autodump \
-            -v 1.0.0 \
+            -v ${{ github.run_number }} \
             --vendor "lteian" \
             --maintainer "lteian" \
             --description "USB自动转储工具 - 支持统信UOS/麒麟Kylin" \
             --category Utility \
-            -p dist/usb-autodump_1.0.0_amd64.deb \
+            -p dist/usb-autodump_${{ github.run_number }}_amd64.deb \
             -f \
             dist/deb_root
 
@@ -47,7 +47,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: usb-autodump-DEB
-          path: dist/usb-autodump_1.0.0_amd64.deb
+          path: dist/usb-autodump_${{ github.run_number }}_amd64.deb
           retention-days: 30
 
       - name: Create Release
