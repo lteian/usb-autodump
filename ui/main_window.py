@@ -138,6 +138,9 @@ class MainWindow(QMainWindow):
             card.cancel_clicked.connect(self._on_cancel_requested)
 
     def _start_services(self):
+        # 重启时预填充当前已插入的 USB，避免 poll loop 把它们当新设备处理两次
+        for dev in self._usb_monitor.get_current_devices():
+            self._usb_monitor._last_drives[dev.drive_letter] = dev
         self._usb_monitor.start()
         self._ftp_uploader.start()
         for dev in self._usb_monitor.get_current_devices():
@@ -146,17 +149,20 @@ class MainWindow(QMainWindow):
         self._refresh_pending_list()
 
     def _on_usb_event(self, event: str, device: USBDevice):
-        drive = device.drive_letter
-        if event == "insert":
-            self.log_panel.append_info(
-                f"{drive} 插入，容量 {self._fmt_size(device.total_size)}，"
-                f"已用 {device.used_space / device.total_size * 100:.0f}%" if device.total_size else ""
-            )
-            self._allocate_card(drive, device)
-            self._start_copy_if_needed(drive)
-        elif event == "remove":
-            self.log_panel.append_info(f"{drive} 已移除")
-            self._release_card(drive)
+        try:
+            drive = device.drive_letter
+            if event == "insert":
+                self.log_panel.append_info(
+                    f"{drive} 插入，容量 {self._fmt_size(device.total_size)}，"
+                    f"已用 {device.used_space / device.total_size * 100:.0f}%" if device.total_size else ""
+                )
+                self._allocate_card(drive, device)
+                self._start_copy_if_needed(drive)
+            elif event == "remove":
+                self.log_panel.append_info(f"{drive} 已移除")
+                self._release_card(drive)
+        except Exception as e:
+            logger.error(f"_on_usb_event 异常: {e}")
 
     def _allocate_card(self, drive_letter: str, device: USBDevice):
         for card in self._cards:
@@ -181,28 +187,33 @@ class MainWindow(QMainWindow):
         self._copy_engine.start_copy(drive_letter)
 
     def _on_copy_progress(self, drive_letter: str, idx: int, total: int, task):
-        card = self._usb_cards.get(drive_letter)
-        if card:
-            card.update_copy_progress(idx, total, task.progress)
-            # 显示当前文件名
-            fname = task.src_path
-            slash = max(fname.rfind("/"), fname.rfind("\\"))
-            if slash >= 0:
-                fname = fname[slash + 1:]
-            card.set_current_file(fname)
-            if task.status == "copied":
-                self.log_panel.append_info(f"复制完成: {task.src_path}")
+        try:
+            card = self._usb_cards.get(drive_letter)
+            if card:
+                card.update_copy_progress(idx, total, task.progress)
+                fname = task.src_path
+                slash = max(fname.rfind("/"), fname.rfind("\\"))
+                if slash >= 0:
+                    fname = fname[slash + 1:]
+                card.set_current_file(fname)
+                if task.status == "copied":
+                    self.log_panel.append_info(f"复制完成: {task.src_path}")
+        except Exception as e:
+            logger.error(f"_on_copy_progress 异常: {e}")
 
     def _on_copy_done(self, drive_letter: str, tasks: list):
-        card = self._usb_cards.get(drive_letter)
-        if not card:
-            return
-        copied = sum(1 for t in tasks if t.status == "copied")
-        errors = sum(1 for t in tasks if t.status == "error")
-        self.log_panel.append_info(f"{drive_letter} 复制完成: {copied}个成功，{errors}个失败")
-        card.set_status(USBCard.STATUS_DONE)
-        self._update_status_bar()
-        self._refresh_pending_list()
+        try:
+            card = self._usb_cards.get(drive_letter)
+            if not card:
+                return
+            copied = sum(1 for t in tasks if t.status == "copied")
+            errors = sum(1 for t in tasks if t.status == "error")
+            self.log_panel.append_info(f"{drive_letter} 复制完成: {copied}个成功，{errors}个失败")
+            card.set_status(USBCard.STATUS_DONE)
+            self._update_status_bar()
+            self._refresh_pending_list()
+        except Exception as e:
+            logger.error(f"_on_copy_done 异常: {e}")
 
     def _on_upload_done(self, task):
         if task.status == "uploaded":

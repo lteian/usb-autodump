@@ -106,6 +106,7 @@ class CopyEngine:
 
     def _copy_with_progress(self, task: CopyTask, chunk_size: int = 1024 * 1024):
         copied = 0
+        chunk_count = 0
         with open(task.src_path, "rb") as fsrc:
             with open(task.dst_path, "wb") as fdst:
                 while True:
@@ -114,7 +115,20 @@ class CopyEngine:
                         break
                     fdst.write(chunk)
                     copied += len(chunk)
+                    chunk_count += 1
                     task.progress = copied / task.file_size * 100
+                    # 每 8MB 做一次 fsync，防止断电丢数据
+                    if len(chunk) == chunk_size and chunk_count % 8 == 0:
+                        try:
+                            os.fsync(fdst.fileno())
+                        except Exception as e:
+                            logger.warning(f"fsync 警告: {e}")
+                # 关闭前强制刷盘，确保文件完整可读
+                try:
+                    fdst.flush()
+                    os.fsync(fdst.fileno())
+                except Exception as e:
+                    logger.warning(f"最终 fsync 警告: {e}")
 
     def cancel_copy(self, drive_letter: str):
         with self._lock:

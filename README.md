@@ -1,5 +1,8 @@
 # U盘自动转储工具
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/github/v/release/lteian/usb-autodump?include_prereleases&label=version)](https://github.com/lteian/usb-autodump/releases)
+
 USB 自动检测、视频文件转储、FTP 上传的 Windows/Linux 桌面工具。
 
 ## 功能特性
