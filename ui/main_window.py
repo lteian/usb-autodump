@@ -1,4 +1,9 @@
 # ui/main_window.py
+"""
+重构后：MainWindow 通过 ProcessManager 管理子进程，
+通过队列事件刷新 UI，不再直接调用 copy_engine 的线程方法。
+"""
+import multiprocessing as mp
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QScrollArea, QStatusBar, QMessageBox,
                              QGridLayout, QFrame, QPushButton)
@@ -8,12 +13,12 @@ from ui.usb_card import USBCard
 from ui.log_panel import LogPanel
 from ui.settings_dialog import SettingsDialog
 from core.usb_monitor import USBMonitor, USBDevice
-from core.copy_engine import CopyEngine
-from core.ftp_uploader import FTPUploader
 from core.disk_tool import format_drive, eject_drive
-from core.file_record import get_pending_count_and_size, get_uploaded_count_and_size
+from core.file_record import get_pending_count_and_size, get_uploaded_count_and_size, get_records_by_status
+from core.process_manager import ProcessManager
 from utils.logger import get_logger
-from utils.config import is_password_set
+from utils.config import is_password_set, get_ftp_config, load_config
+from pathlib import Path
 
 logger = get_logger()
 MAX_USB_SLOTS = 8
@@ -23,16 +28,22 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self._usb_monitor = USBMonitor()
-        self._copy_engine = CopyEngine()
-        self._ftp_uploader = FTPUploader()
         self._usb_cards: dict[str, USBCard] = {}
         self._cards: list[USBCard] = []
+        self._event_queue = mp.Queue()
+        self._process_manager = ProcessManager(self._event_queue)
+        self._copy_drive_map: dict[str, str] = {}  # drive_letter -> drive_letter (for completed copies)
         self._setup_ui()
         self._setup_signals()
         self._start_services()
         self._status_timer = QTimer()
         self._status_timer.timeout.connect(self._update_status_bar)
         self._status_timer.start(2000)
+
+        # UI 刷新定时器 - 从队列获取子进程事件
+        self._poll_timer = QTimer()
+        self._poll_timer.timeout.connect(self._poll_child_events)
+        self._poll_timer.start(100)
 
     def _setup_ui(self):
         self.setWindowTitle("🚀 U盘自动转储工具")
@@ -91,9 +102,6 @@ class MainWindow(QMainWindow):
 
     def _setup_signals(self):
         self._usb_monitor.add_callback(self._on_usb_event)
-        self._copy_engine.add_progress_callback(self._on_copy_progress)
-        self._copy_engine.add_done_callback(self._on_copy_done)
-        self._ftp_uploader.add_callback(self._on_upload_done)
 
         for card in self._cards:
             card.format_clicked.connect(self._on_format_requested)
@@ -101,24 +109,136 @@ class MainWindow(QMainWindow):
             card.cancel_clicked.connect(self._on_cancel_requested)
 
     def _start_services(self):
+        # 预填充当前已插入的 USB，避免 poll loop 把它们当新设备处理两次
+        for dev in self._usb_monitor.get_current_devices():
+            self._usb_monitor._last_drives[dev.drive_letter] = dev
+
+        # 启动 FTP 子进程
+        self._process_manager.start_ftp_worker()
+
         self._usb_monitor.start()
-        self._ftp_uploader.start()
+
+        # 触发已插入设备的复制
         for dev in self._usb_monitor.get_current_devices():
             QTimer.singleShot(500, lambda d=dev: self._on_usb_event("insert", d))
+
         self.log_panel.append_info("服务已启动，等待 USB 设备...")
 
-    def _on_usb_event(self, event: str, device: USBDevice):
-        drive = device.drive_letter
-        if event == "insert":
-            self.log_panel.append_info(
-                f"{drive} 插入，容量 {self._fmt_size(device.total_size)}，"
-                f"已用 {device.used_space / device.total_size * 100:.0f}%" if device.total_size else ""
+    def _poll_child_events(self):
+        """轮询子进程事件队列，刷新 UI"""
+        try:
+            while True:
+                event = self._event_queue.get_nowait()
+                self._handle_child_event(event)
+        except:
+            pass
+
+    def _handle_child_event(self, event: dict):
+        etype = event.get("type", "")
+
+        if etype == "copy_scan_start":
+            drive_letter = event.get("drive_letter", "")
+            card = self._usb_cards.get(drive_letter)
+            if card:
+                card.set_status(USBCard.STATUS_COPYING)
+                self.log_panel.append_info("开始扫描视频文件...")
+
+        elif etype == "copy_scan_done":
+            drive_letter = event.get("drive_letter", "")
+            total = event.get("total", 0)
+            self.log_panel.append_info(f"扫描完成，共 {total} 个视频文件")
+
+        elif etype == "copy_progress":
+            drive_letter = event.get("drive_letter", "")
+            idx = event.get("idx", 0)
+            total = event.get("total", 0)
+            progress = event.get("progress", 0)
+            status = event.get("status", "copying")
+            card = self._usb_cards.get(drive_letter)
+            if card:
+                card.update_copy_progress(idx, total, progress)
+                if status == "copied":
+                    src_path = event.get("src_path", "")
+                    self.log_panel.append_info(f"复制完成: {src_path}")
+
+        elif etype == "copy_done":
+            drive_letter = event.get("drive_letter", "")
+            total = event.get("total", 0)
+            copied = event.get("copied", 0)
+            errors = event.get("errors", 0)
+            card = self._usb_cards.get(drive_letter)
+            if card:
+                card.set_status(USBCard.STATUS_DONE)
+                self.log_panel.append_info(f"{drive_letter} 复制完成: {copied}个成功，{errors}个失败")
+                # 通知 FTP 上传
+                self._enqueue_ftp_uploads(drive_letter)
+            self._update_status_bar()
+
+        elif etype == "copy_error":
+            drive_letter = event.get("drive_letter", "")
+            error_msg = event.get("error_msg", "未知错误")
+            self.log_panel.append_error(f"{drive_letter} 复制错误: {error_msg}")
+
+        elif etype == "ftp_status":
+            connected = event.get("connected", False)
+            self.ftp_status_label.setText(f"FTP: {'●已连接' if connected else '○未连接'}")
+            self.ftp_status_label.setStyleSheet(
+                "color: #4CAF50; font-size: 12px; padding: 0 8px;" if connected
+                else "color: #9e9e9e; font-size: 12px; padding: 0 8px;"
             )
-            self._allocate_card(drive, device)
-            self._start_copy_if_needed(drive)
-        elif event == "remove":
-            self.log_panel.append_info(f"{drive} 已移除")
-            self._release_card(drive)
+
+        elif etype == "ftp_success":
+            local_path = event.get("local_path", "")
+            self.log_panel.append_info(f"上传成功: {local_path}")
+            self._update_status_bar()
+
+        elif etype == "ftp_error":
+            local_path = event.get("local_path", "")
+            error_msg = event.get("error_msg", "未知错误")
+            self.log_panel.append_error(f"上传失败: {local_path} - {error_msg}")
+            self._update_status_bar()
+
+        elif etype == "ftp_deleted":
+            local_path = event.get("local_path", "")
+            self.log_panel.append_info(f"本地文件已删除: {local_path}")
+
+    def _enqueue_ftp_uploads(self, drive_letter: str):
+        """将复制完成的文件加入 FTP 上传队列"""
+        cfg = get_ftp_config()
+        sub_path = cfg.get("sub_path", "/")
+
+        records = get_records_by_status("copied")
+        for rec in records:
+            local_path = rec.get("local_path", "")
+            if not local_path:
+                continue
+            # 只处理该盘符对应的文件
+            if not local_path.startswith(drive_letter.rstrip("\\/")):
+                continue
+            ftp_sub = f"{sub_path.rstrip('/')}/{Path(local_path).name}"
+            self._process_manager.send_ftp_task(
+                rec["id"],
+                local_path,
+                ftp_sub,
+                rec.get("file_size", 0) or 0
+            )
+        self._update_status_bar()
+
+    def _on_usb_event(self, event: str, device: USBDevice):
+        try:
+            drive = device.drive_letter
+            if event == "insert":
+                self.log_panel.append_info(
+                    f"{drive} 插入，容量 {self._fmt_size(device.total_size)}，"
+                    f"已用 {device.used_space / device.total_size * 100:.0f}%" if device.total_size else ""
+                )
+                self._allocate_card(drive, device)
+                self._start_copy_if_needed(drive)
+            elif event == "remove":
+                self.log_panel.append_info(f"{drive} 已移除")
+                self._release_card(drive)
+        except Exception as e:
+            logger.error(f"_on_usb_event 异常: {e}")
 
     def _allocate_card(self, drive_letter: str, device: USBDevice):
         for card in self._cards:
@@ -128,43 +248,23 @@ class MainWindow(QMainWindow):
                 break
 
     def _release_card(self, drive_letter: str):
+        # 停止复制进程
+        self._process_manager.stop_copy_worker(drive_letter)
         card = self._usb_cards.pop(drive_letter, None)
         if card:
             card.clear()
-        if self._copy_engine.is_copying(drive_letter):
-            self._copy_engine.cancel_copy(drive_letter)
 
     def _start_copy_if_needed(self, drive_letter: str):
-        card = self._usb_cards.get(drive_letter)
-        if not card:
+        # 检查是否已有复制进程在运行
+        if self._process_manager.is_copy_worker_alive(drive_letter):
             return
-        card.set_status(USBCard.STATUS_COPYING)
-        self.log_panel.append_info("开始扫描视频文件...")
-        self._copy_engine.start_copy(drive_letter)
+        # 启动复制
+        self._process_manager.start_copy_worker(drive_letter, self._get_dest_dir(drive_letter))
 
-    def _on_copy_progress(self, drive_letter: str, idx: int, total: int, task):
-        card = self._usb_cards.get(drive_letter)
-        if card:
-            card.update_copy_progress(idx, total, task.progress)
-            if task.status == "copied":
-                self.log_panel.append_info(f"复制完成: {task.src_path}")
-
-    def _on_copy_done(self, drive_letter: str, tasks):
-        card = self._usb_cards.get(drive_letter)
-        if not card:
-            return
-        copied = sum(1 for t in tasks if t.status == "copied")
-        errors = sum(1 for t in tasks if t.status == "error")
-        self.log_panel.append_info(f"{drive_letter} 复制完成: {copied}个成功，{errors}个失败")
-        card.set_status(USBCard.STATUS_DONE)
-        self._update_status_bar()
-
-    def _on_upload_done(self, task):
-        if task.status == "uploaded":
-            self.log_panel.append_info(f"上传成功: {task.local_path}")
-        elif task.status == "error":
-            self.log_panel.append_error(f"上传失败: {task.local_path} - {task.error_msg}")
-        self._update_status_bar()
+    def _get_dest_dir(self, drive_letter: str) -> str:
+        from utils.config import get_local_path
+        local_base = Path(get_local_path(drive_letter))
+        return str(local_base / drive_letter.rstrip("\\/"))
 
     def _on_format_requested(self, drive_letter: str):
         card = self._usb_cards.get(drive_letter)
@@ -188,7 +288,7 @@ class MainWindow(QMainWindow):
         self.log_panel.append_info(f"{'已弹出' if ok else '弹出失败'}: {drive_letter}")
 
     def _on_cancel_requested(self, drive_letter: str):
-        self._copy_engine.cancel_copy(drive_letter)
+        self._process_manager.stop_copy_worker(drive_letter)
         self.log_panel.append_warning(f"已取消复制: {drive_letter}")
         card = self._usb_cards.get(drive_letter)
         if card:
@@ -201,14 +301,8 @@ class MainWindow(QMainWindow):
     def _update_status_bar(self):
         pn, ps = get_pending_count_and_size()
         un, us = get_uploaded_count_and_size()
-        queue = self._ftp_uploader.get_queue_size()
-        connected = self._ftp_uploader.is_connected()
+        queue = self._process_manager.get_ftp_queue_size()
 
-        self.ftp_status_label.setText(f"FTP: {'●已连接' if connected else '○未连接'}")
-        self.ftp_status_label.setStyleSheet(
-            "color: #4CAF50; font-size: 12px; padding: 0 8px;" if connected
-            else "color: #9e9e9e; font-size: 12px; padding: 0 8px;"
-        )
         self.status_bar.showMessage(
             f"  待上传: {pn}个 ({self._fmt_size(ps)})  |  "
             f"已上传: {un}个 ({self._fmt_size(us)})  |  队列: {queue}"
@@ -222,9 +316,11 @@ class MainWindow(QMainWindow):
         return f"{b}B"
 
     def closeEvent(self, event):
+        self._poll_timer.stop()
+        self._status_timer.stop()
         if hasattr(self, '_usb_monitor'):
             self._usb_monitor.stop()
-        if hasattr(self, '_ftp_uploader'):
-            self._ftp_uploader.stop()
+        if hasattr(self, '_process_manager'):
+            self._process_manager.stop_all()
         logger.info("应用退出")
         event.accept()

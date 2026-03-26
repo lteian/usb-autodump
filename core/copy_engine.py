@@ -1,18 +1,22 @@
 # core/copy_engine.py
-import os
-import threading
+"""
+重构后：CopyEngine 变为对 ProcessManager 的代理，
+保留原有回调接口，实际复制工作在子进程中完成。
+"""
+import multiprocessing as mp
+import queue
 from pathlib import Path
 from typing import Callable, List, Optional
-from utils.config import get_video_extensions, get_local_path
+from utils.config import get_local_path
 from utils.logger import get_logger
-from core.file_record import add_record, update_status
 
 logger = get_logger()
 
 
 class CopyTask:
-    def __init__(self, usb_drive: str, src_path: str, dst_path: str, file_size: int, record_id: int):
-        self.usb_drive = usb_drive
+    """保持与原有结构兼容"""
+    def __init__(self, drive_letter: str, src_path: str, dst_path: str, file_size: int, record_id: int):
+        self.drive_letter = drive_letter
         self.src_path = src_path
         self.dst_path = dst_path
         self.file_size = file_size
@@ -23,13 +27,23 @@ class CopyTask:
 
 
 class CopyEngine:
-    def __init__(self):
-        self._tasks: dict[str, List[CopyTask]] = {}
-        self._threads: dict[str, threading.Thread] = {}
+    """
+    CopyEngine 通过 ProcessManager 启动子进程执行复制任务，
+    保留原有回调接口以维持 UI 兼容性。
+    """
+
+    def __init__(self, event_queue: Optional[mp.Queue] = None):
+        self._event_queue = event_queue or mp.Queue()
+        # 内部维护一个简单的 ProcessManager 引用（延迟初始化）
+        self._process_manager = None
         self._progress_callbacks: List[Callable] = []
         self._done_callbacks: List[Callable] = []
-        self._cancel_flags: dict[str, bool] = {}
-        self._lock = threading.Lock()
+        self._scan_callbacks: List[Callable] = []
+        self._scan_done_callbacks: List[Callable] = []
+
+    def set_process_manager(self, pm):
+        """由 MainWindow 注入 ProcessManager 实例"""
+        self._process_manager = pm
 
     def add_progress_callback(self, cb: Callable):
         self._progress_callbacks.append(cb)
@@ -37,97 +51,117 @@ class CopyEngine:
     def add_done_callback(self, cb: Callable):
         self._done_callbacks.append(cb)
 
+    def add_scan_callback(self, cb: Callable):
+        """扫描开始回调"""
+        self._scan_callbacks.append(cb)
+
+    def add_scan_done_callback(self, cb: Callable):
+        """扫描完成回调"""
+        self._scan_done_callbacks.append(cb)
+
     def start_copy(self, drive_letter: str) -> List[CopyTask]:
-        video_exts = get_video_extensions()
+        """启动 U 盘复制子进程"""
+        if not self._process_manager:
+            logger.error("ProcessManager 未设置")
+            return []
+
+        # 检查是否已有该盘符的复制进程
+        if self._process_manager.is_copy_worker_alive(drive_letter):
+            logger.warning(f"复制进程已存在: {drive_letter}")
+            return []
+
         local_base = Path(get_local_path(drive_letter))
-        dest_dir = local_base / drive_letter.rstrip("\\/")
-        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_dir = str(local_base / drive_letter.rstrip("\\/"))
 
-        tasks = []
-        with self._lock:
-            self._cancel_flags[drive_letter] = False
+        for cb in self._scan_callbacks:
+            try:
+                cb(drive_letter)
+            except Exception as e:
+                logger.error(f"扫描开始回调错误: {e}")
 
-        for root, dirs, files in os.walk(drive_letter):
-            if self._cancel_flags.get(drive_letter, False):
-                break
-            for filename in files:
-                ext = Path(filename).suffix.lower()
-                if ext not in video_exts:
-                    continue
-                src_path = os.path.join(root, filename)
-                rel_path = os.path.relpath(src_path, drive_letter)
-                dst_path = str(dest_dir / rel_path)
+        self._process_manager.start_copy_worker(drive_letter, dest_dir)
+        return []
+
+    def cancel_copy(self, drive_letter: str):
+        """停止指定 U 盘的复制子进程"""
+        if self._process_manager:
+            self._process_manager.stop_copy_worker(drive_letter)
+
+    def is_copying(self, drive_letter: str) -> bool:
+        """检查是否正在复制"""
+        if self._process_manager:
+            return self._process_manager.is_copy_worker_alive(drive_letter)
+        return False
+
+    def get_tasks(self, drive_letter: str) -> List[CopyTask]:
+        """返回空列表，实际任务状态通过回调获取"""
+        return []
+
+    def poll_events(self):
+        """轮询事件队列，处理来自子进程的事件（供 MainWindow 调用）"""
+        try:
+            while True:
+                event = self._event_queue.get_nowait()
+                self._handle_event(event)
+        except queue.Empty:
+            pass
+
+    def _handle_event(self, event: dict):
+        etype = event.get("type", "")
+
+        if etype == "copy_scan_start":
+            for cb in self._scan_callbacks:
                 try:
-                    file_size = os.path.getsize(src_path)
-                except OSError:
-                    continue
-                record_id = add_record(drive_letter, src_path, dst_path, file_size)
-                task = CopyTask(drive_letter, src_path, dst_path, file_size, record_id)
-                tasks.append(task)
-
-        with self._lock:
-            self._tasks[drive_letter] = tasks
-
-        def worker():
-            for i, task in enumerate(tasks):
-                if self._cancel_flags.get(drive_letter, False):
-                    break
-                try:
-                    update_status(task.record_id, "copying")
-                    task.status = "copying"
-                    os.makedirs(os.path.dirname(task.dst_path), exist_ok=True)
-                    self._copy_with_progress(task)
-                    update_status(task.record_id, "copied")
-                    task.status = "copied"
-                    logger.info(f"复制完成: {task.src_path} -> {task.dst_path}")
+                    cb(event["drive_letter"])
                 except Exception as e:
-                    task.error_msg = str(e)
-                    task.status = "error"
-                    update_status(task.record_id, "error", str(e))
-                    logger.error(f"复制失败: {task.src_path} - {e}")
+                    logger.error(f"扫描开始回调错误: {e}")
 
-                for cb in self._progress_callbacks:
-                    try:
-                        cb(drive_letter, i + 1, len(tasks), task)
-                    except Exception as e:
-                        logger.error(f"进度回调错误: {e}")
+        elif etype == "copy_scan_done":
+            for cb in self._scan_done_callbacks:
+                try:
+                    cb(event["drive_letter"], event["total"])
+                except Exception as e:
+                    logger.error(f"扫描完成回调错误: {e}")
 
+        elif etype == "copy_progress":
+            task = CopyTask(
+                event["drive_letter"],
+                event.get("src_path", ""),
+                event.get("dst_path", ""),
+                0,
+                event.get("record_id", 0)
+            )
+            task.progress = event.get("progress", 0)
+            task.status = event.get("status", "copying")
+            for cb in self._progress_callbacks:
+                try:
+                    cb(event["drive_letter"], event["idx"], event["total"], task)
+                except Exception as e:
+                    logger.error(f"进度回调错误: {e}")
+
+        elif etype == "copy_done":
             for cb in self._done_callbacks:
                 try:
-                    cb(drive_letter, tasks)
+                    cb(event["drive_letter"], event.get("total", 0), event.get("copied", 0), event.get("errors", 0))
                 except Exception as e:
                     logger.error(f"完成回调错误: {e}")
 
-        t = threading.Thread(target=worker, daemon=True)
-        with self._lock:
-            self._threads[drive_letter] = t
-        t.start()
-        return tasks
+        elif etype == "copy_error":
+            task = CopyTask(
+                event["drive_letter"],
+                event.get("src_path", ""),
+                "",
+                0,
+                event.get("record_id", 0)
+            )
+            task.status = "error"
+            task.error_msg = event.get("error_msg", "未知错误")
+            for cb in self._progress_callbacks:
+                try:
+                    cb(event["drive_letter"], event.get("idx", 0), event.get("total", 0), task)
+                except Exception as e:
+                    logger.error(f"错误回调错误: {e}")
 
-    def _copy_with_progress(self, task: CopyTask, chunk_size: int = 1024 * 1024):
-        copied = 0
-        with open(task.src_path, "rb") as fsrc:
-            with open(task.dst_path, "wb") as fdst:
-                while True:
-                    chunk = fsrc.read(chunk_size)
-                    if not chunk:
-                        break
-                    fdst.write(chunk)
-                    copied += len(chunk)
-                    task.progress = copied / task.file_size * 100
-
-    def cancel_copy(self, drive_letter: str):
-        with self._lock:
-            self._cancel_flags[drive_letter] = True
-            t = self._threads.get(drive_letter)
-            if t and t.is_alive():
-                t.join(timeout=2)
-
-    def get_tasks(self, drive_letter: str) -> List[CopyTask]:
-        with self._lock:
-            return list(self._tasks.get(drive_letter, []))
-
-    def is_copying(self, drive_letter: str) -> bool:
-        with self._lock:
-            t = self._threads.get(drive_letter)
-            return t is not None and t.is_alive()
+    def get_event_queue(self) -> mp.Queue:
+        """返回事件队列，供 MainWindow 轮询"""
+        return self._event_queue
