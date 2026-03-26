@@ -1,5 +1,8 @@
 # U盘自动转储工具
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/github/v/release/lteian/usb-autodump?include_prereleases&label=version)](https://github.com/lteian/usb-autodump/releases)
+
 USB 自动检测、视频文件转储、FTP 上传的 Windows/Linux 桌面工具。
 
 ## 功能特性
@@ -53,7 +56,7 @@ USB 自动检测、视频文件转储、FTP 上传的 Windows/Linux 桌面工具
 
 ### Linux（DEB）- 统信 UOS / 麒麟 Kylin
 ```bash
-sudo dpkg -i usb-autodump_1.0.0_amd64.deb
+sudo dpkg -i usb-autodump_1.1.0_amd64.deb
 # 运行
 usb-autodump
 ```
