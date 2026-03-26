@@ -25,18 +25,13 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --name usb-autodump main.py
-
-      - name: Create output directory
-        run: |
-          mkdir -p dist
-          cp dist/usb-autodump.exe dist/usb-autodump.exe || copy dist\usb-autodump.exe dist\
+          pyinstaller --onefile --noconsole --name usb-autodump main.py
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
           name: usb-autodump-Windows-EXE
-          path: dist/usb-autodump.exe
+          path: dist/usb-autodump/usb-autodump.exe
           retention-days: 30
 
       - name: Create Release

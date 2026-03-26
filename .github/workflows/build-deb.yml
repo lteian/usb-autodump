@@ -54,7 +54,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/usb-autodump_1.0.0_amd64.deb
-          generate_release_notes: true
+          files: dist/usb-autodump_${{ github.run_number }}_amd64.deb
+          body_path: CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
