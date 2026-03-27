@@ -100,6 +100,28 @@ QList<FileRecord> FileRecordDB::pendingRecords() {
     return list;
 }
 
+QList<FileRecord> FileRecordDB::recordsForDrive(const QString& drive) {
+    QList<FileRecord> list;
+    QSqlQuery q(d->db);
+    q.exec(QString("SELECT * FROM file_records WHERE usb_drive='%1'").arg(drive));
+    while (q.next()) {
+        FileRecord r;
+        r.id = q.value("id").toInt();
+        r.usbDrive = q.value("usb_drive").toString();
+        r.filePath = q.value("file_path").toString();
+        r.localPath = q.value("local_path").toString();
+        r.ftpPath = q.value("ftp_path").toString();
+        r.status = q.value("status").toString();
+        r.fileSize = q.value("file_size").toInt();
+        r.copiedAt = q.value("copied_at").toString();
+        r.uploadedAt = q.value("uploaded_at").toString();
+        r.deletedAt = q.value("deleted_at").toString();
+        r.errorMsg = q.value("error_msg").toString();
+        list << r;
+    }
+    return list;
+}
+
 QPair<int, qint64> FileRecordDB::pendingCountAndSize() {
     QSqlQuery q(d->db);
     q.exec("SELECT COUNT(*), COALESCE(SUM(file_size),0) FROM file_records "

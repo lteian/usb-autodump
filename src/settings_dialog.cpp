@@ -10,6 +10,8 @@
 #include <QPushButton>
 #include <QHeaderView>
 #include <QApplication>
+#include <QStandardPaths>
+#include <QRegExp>
 
 SettingsDialog::SettingsDialog(QWidget* parent)
     : QDialog(parent)
@@ -22,7 +24,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
         QLineEdit { background: #2d2d2d; color: #e0e0e0; border: 1px solid #4a4a4a; padding: 6px; border-radius: 4px; }
         QCheckBox { color: #e0e0e0; }
         QSpinBox { background: #2d2d2d; color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 4px; }
-        QTableWidget { background: #2d2d2d; color: #e0e0e0; gridline-color: #4a4a4a; }
+        QTableWidget { background: #2d2d2d; color: #e0e0d4d4; gridline-color: #4a4a4a; }
         QHeaderView::section { background: #2d2d2d; color: #e0e0e0; border: 1px solid #4a4a4a; }
         QTabWidget::pane { border: 1px solid #4a4a4a; border-radius: 4px; }
         QTabBar::tab { background: #2d2d2d; color: #9e9e9e; padding: 6px 12px; }
@@ -39,7 +41,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     m_encWarn->setStyleSheet("background: #FF9800; color: #1e1e1e; padding: 10px 14px; border-radius: 6px; font-weight: bold;");
     vl->addWidget(m_encWarn);
 
-    // ── Encryption Password ───────────────────────────────
+    // ── Encryption Password ────────────────────────────────
     QGroupBox* encGrp = new QGroupBox("🔐 加密密码");
     QVBoxLayout* encVl = new QVBoxLayout();
 
@@ -138,12 +140,6 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     m_tabs->addTab(advTab, "高级选项");
     vl->addWidget(m_tabs);
 
-    // ── Reset Button ─────────────────────────────────────
-    QPushButton* resetBtn = new QPushButton("🔑 忘记密码？重置所有配置");
-    resetBtn->setStyleSheet("QPushButton { background: #b71c1c; color: white; border: none; border-radius: 4px; padding: 8px 16px; font-size: 12px; } QPushButton:hover { background: #c62828; }");
-    connect(resetBtn, &QPushButton::clicked, this, &SettingsDialog::onResetAll);
-    vl->addWidget(resetBtn);
-
     // ── Buttons ──────────────────────────────────────────
     QHBoxLayout* btnRow = new QHBoxLayout();
     btnRow->addStretch();
@@ -195,23 +191,6 @@ void SettingsDialog::onBrowseLocalPath() {
     if (!dir.isEmpty()) m_localPathEdit->setText(dir);
 }
 
-void SettingsDialog::onResetAll() {
-    int r = QMessageBox::question(this, "⚠️ 确认重置",
-        "确定要重置所有配置吗？\n\n"
-        "此操作将删除：\n"
-        "• 加密密码\n"
-        "• FTP 配置\n"
-        "• 所有已保存的记录\n\n"
-        "此操作不可恢复！",
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (r != QMessageBox::Yes) return;
-
-    Config::instance().clearAll();
-    FileRecordDB::instance().clearAll();
-    QMessageBox::information(this, "已重置", "配置已清空，请重启程序。");
-    QApplication::quit();
-}
-
 void SettingsDialog::onSave() {
     // Validate encryption password
     QString newPwd = m_encPwdEdit->text();
@@ -250,10 +229,14 @@ void SettingsDialog::onSave() {
         }
         QString encPwd = newPwd.isEmpty() ? oldEncPwd : newPwd;
         ftpPass = Crypto::encrypt(ftpPass, encPwd);
+        // Also update verification token
+        if (!newPwd.isEmpty()) {
+            QString token = Crypto::encrypt("USB_AUTO_DUMP_VERIFY_TOKEN_v1", newPwd);
+            Config::instance().setPasswordVerificationToken(token);
+        }
     }
 
     Config& cfg = Config::instance();
-    cfg.load();
 
     if (!newPwd.isEmpty()) {
         cfg.setEncryptionPassword(newPwd);
@@ -272,10 +255,7 @@ void SettingsDialog::onSave() {
     ftp["use_tls"] = m_ftpTls->isChecked();
     ftp["max_retry"] = m_retrySpin->value();
 
-    QJsonObject data = cfg.load().value(QJsonObject()).object(); // This is wrong, fix below
-    // Re-load properly
-    cfg.load();
-
+    // Build root object
     QJsonObject root;
     root["local_path"] = m_localPathEdit->text().trimmed();
     root["encryption_password"] = newPwd.isEmpty() ? oldEncPwd : newPwd;
@@ -284,15 +264,12 @@ void SettingsDialog::onSave() {
     root["auto_format_after_copy"] = m_autoFormat->isChecked();
     root["usb_paths"] = QJsonObject::fromVariantMap(usbPaths);
 
-    // Manually save via Config
-    QJsonDocument doc(root);
+    // Keep video extensions
+    QJsonArray exts;
+    for (const QString& e : cfg.videoExtensions()) exts.append(e);
+    root["video_extensions"] = exts;
 
-    // Use Config's save path
-    QFile f(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) +
-            "/usb-autodump/config.json");
-    if (f.open(QIODevice::WriteOnly)) {
-        f.write(doc.toJson(QJsonDocument::Indented));
-    }
+    cfg.setData(root);
 
     QMessageBox::information(this, "保存成功", "配置已保存！");
     accept();

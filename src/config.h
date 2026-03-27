@@ -18,6 +18,8 @@ public:
     bool isPasswordSet() const;
     void setEncryptionPassword(const QString& pwd);
     QString encryptionPassword() const;
+    QString passwordVerificationToken() const;
+    void setPasswordVerificationToken(const QString& token);
 
     // convenience
     int maxRetry() const;

@@ -21,7 +21,6 @@ private slots:
 
 private:
     void loadCurrentConfig();
-    void saveConfig();
 
     QTabWidget* m_tabs = nullptr;
 

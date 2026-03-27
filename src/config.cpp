@@ -77,6 +77,15 @@ QString Config::encryptionPassword() const {
     return m_data.value("encryption_password").toString();
 }
 
+QString Config::passwordVerificationToken() const {
+    return m_data.value("password_verification_token").toString();
+}
+
+void Config::setPasswordVerificationToken(const QString& token) {
+    m_data["password_verification_token"] = token;
+    save();
+}
+
 int Config::maxRetry() const {
     return m_data.value("ftp").toObject().value("max_retry").toInt(3);
 }
@@ -93,7 +102,10 @@ QStringList Config::videoExtensions() const {
     QStringList exts;
     QJsonArray arr = m_data.value("video_extensions").toArray();
     for (const QJsonValue& v : arr) exts << v.toString();
-    if (exts.isEmpty()) exts << ".mp4";
+    if (exts.isEmpty()) {
+        exts << ".mp4" << ".avi" << ".mkv" << ".mov" << ".wmv"
+             << ".flv" << ".webm" << ".m4v" << ".mpg" << ".mpeg";
+    }
     return exts;
 }
 

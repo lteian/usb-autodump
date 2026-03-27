@@ -27,6 +27,7 @@ public:
     void updateStatus(int id, const QString& status, const QString& err = "");
     void updateFtpPath(int id, const QString& path);
     QList<FileRecord> pendingRecords();
+    QList<FileRecord> recordsForDrive(const QString& drive);
     QPair<int, qint64> pendingCountAndSize();
     QPair<int, qint64> uploadedCountAndSize();
     void clearAll();

@@ -2,11 +2,13 @@
 #include "usb_card.h"
 #include "log_panel.h"
 #include "settings_dialog.h"
+#include "password_dialog.h"
 #include "usb_monitor.h"
-#include "copy_engine.h"
-#include "ftp_uploader.h"
+#include "dump_process.h"
+#include "ftp_process.h"
 #include "disk_tool.h"
 #include "file_record.h"
+#include "upload_queue.h"
 #include "config.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -15,26 +17,24 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QStatusBar>
-#include <QTableWidget>
-#include <QHeaderView>
 #include <QScrollArea>
 #include <QDebug>
-#include <QLineEdit>
-#include <QInputDialog>
 #include <QMessageBox>
 #include <QGroupBox>
+#include <QFileInfo>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
     setWindowTitle("🚀 U盘自动转储工具");
-    setMinimumSize(900, 600);
-    setStyleSheet("QMainWindow { background: #1e1e1e; } QLabel { color: #e0e0e0; } QStatusBar { background: #252525; color: #b0b0b0; }");
+    setMinimumSize(1000, 700);
+    setStyleSheet("QMainWindow { background: #1e1e1e; } QLabel { color: #e0e0e0; }");
 
     // Central widget
     QWidget* central = new QWidget();
     setCentralWidget(central);
     QVBoxLayout* vl = new QVBoxLayout(central);
+    vl->setSpacing(4);
 
     // ── Header ────────────────────────────────────────────
     QFrame* header = new QFrame();
@@ -46,17 +46,21 @@ MainWindow::MainWindow(QWidget* parent)
     hl->addWidget(title);
     hl->addStretch();
 
-    QPushButton* settingsBtn = new QPushButton("⚙ 设置");
-    settingsBtn->setStyleSheet("background: #424242; color: white; border: none; border-radius: 4px; padding: 6px 12px;");
-    connect(settingsBtn, &QPushButton::clicked, this, &MainWindow::onSettingsClicked);
-    hl->addWidget(settingsBtn);
+    m_dumpStatusLabel = new QLabel("转储: 0个进行中");
+    m_dumpStatusLabel->setStyleSheet("color: #9e9e9e; font-size: 12px; padding: 0 8px;");
+    hl->addWidget(m_dumpStatusLabel);
 
     m_ftpStatusLabel = new QLabel("FTP: ○未连接");
     m_ftpStatusLabel->setStyleSheet("color: #9e9e9e; font-size: 12px; padding: 0 8px;");
     hl->addWidget(m_ftpStatusLabel);
+
+    QPushButton* settingsBtn = new QPushButton("⚙ 设置");
+    settingsBtn->setStyleSheet("background: #424242; color: white; border: none; border-radius: 4px; padding: 6px 12px;");
+    connect(settingsBtn, &QPushButton::clicked, this, &MainWindow::onSettingsClicked);
+    hl->addWidget(settingsBtn);
     vl->addWidget(header);
 
-    // ── USB Cards Area ───────────────────────────────────
+    // ── USB Cards Area ────────────────────────────────────
     QScrollArea* scroll = new QScrollArea();
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -73,34 +77,23 @@ MainWindow::MainWindow(QWidget* parent)
         cardsLayout->addWidget(card, i / 4, i % 4);
         connect(card, &USBCard::formatClicked, this, &MainWindow::onFormatClicked);
         connect(card, &USBCard::ejectClicked, this, &MainWindow::onEjectClicked);
-        connect(card, &USBCard::cancelClicked, this, &MainWindow::onCancelClicked);
+        connect(card, &USBCard::cancelDumpClicked, this, &MainWindow::onCancelDumpClicked);
     }
     scroll->setWidget(cardsWidget);
     vl->addWidget(scroll, 1);
 
-    // ── Pending Files List ────────────────────────────────
-    QGroupBox* pendingGrp = new QGroupBox("📋 待上传文件");
-    pendingGrp->setStyleSheet(R"(
-        QGroupBox { color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 4px; margin-top: 8px; }
+    // ── Upload Queue ──────────────────────────────────────
+    QGroupBox* queueGrp = new QGroupBox("📁 待上传文件夹");
+    queueGrp->setStyleSheet(R"(
+        QGroupBox { color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 4px; margin-top: 4px; }
         QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }
     )");
-    QVBoxLayout* pendingVl = new QVBoxLayout(pendingGrp);
-    m_pendingList = new QTableWidget();
-    m_pendingList->setColumnCount(4);
-    m_pendingList->setHorizontalHeaderLabels({"盘符", "文件名", "大小", "状态"});
-    m_pendingList->setColumnWidth(0, 60);
-    m_pendingList->setColumnWidth(1, 400);
-    m_pendingList->setColumnWidth(2, 100);
-    m_pendingList->setColumnWidth(3, 80);
-    m_pendingList->setMaximumHeight(120);
-    m_pendingList->setStyleSheet(R"(
-        QTableWidget { background: #2d2d2d; color: #d4d4d4; gridline-color: #4a4a4a; }
-        QHeaderView::section { background: #2d2d2d; color: #d4d4d4; border: 1px solid #4a4a4a; }
-    )");
-    pendingVl->addWidget(m_pendingList);
-    vl->addWidget(pendingGrp);
+    QVBoxLayout* queueVl = new QVBoxLayout(queueGrp);
+    m_uploadQueue = new UploadQueue();
+    queueVl->addWidget(m_uploadQueue);
+    vl->addWidget(queueGrp);
 
-    // ── Log Panel ────────────────────────────────────────
+    // ── Log Panel ─────────────────────────────────────────
     m_logPanel = new LogPanel();
     vl->addWidget(m_logPanel);
 
@@ -108,28 +101,21 @@ MainWindow::MainWindow(QWidget* parent)
     QStatusBar* sb = new QStatusBar();
     setStatusBar(sb);
 
-    // ── Services ────────────────────────────────────────────
+    // ── USB Monitor ───────────────────────────────────────
     m_usbMonitor = new USBMonitor(this);
-    m_copyEngine = new CopyEngine(this);
-    m_ftpUploader = new FTPUploader(this);
-
     connect(m_usbMonitor, &USBMonitor::deviceInserted, this, &MainWindow::onDeviceInserted);
     connect(m_usbMonitor, &USBMonitor::deviceRemoved, this, &MainWindow::onDeviceRemoved);
-    connect(m_copyEngine, &CopyEngine::copyProgress, this, &MainWindow::onCopyProgress);
-    connect(m_copyEngine, &CopyEngine::copyDone, this, &MainWindow::onCopyDone);
-    connect(m_ftpUploader, &FTPUploader::uploadDone, this, &MainWindow::onUploadDone);
-    connect(m_ftpUploader, &FTPUploader::connectedChanged, this, [this](bool connected) {
-        m_ftpStatusLabel->setText(connected ? "FTP: ●已连接" : "FTP: ○未连接");
-        m_ftpStatusLabel->setStyleSheet(connected
-            ? "color: #4CAF50; font-size: 12px; padding: 0 8px;"
-            : "color: #9e9e9e; font-size: 12px; padding: 0 8px;");
-    });
-    connect(m_ftpUploader, &FTPUploader::logMessage, m_logPanel, &LogPanel::appendInfo);
 
-    // Start services
-    m_ftpUploader->start();
+    // ── FTP Process ───────────────────────────────────────
+    m_ftpProcess = new FTPProcess(this);
+    connect(m_ftpProcess, &FTPProcess::uploadProgress, this, &MainWindow::onFTPUploadProgress);
+    connect(m_ftpProcess, &FTPProcess::uploadDone, this, &MainWindow::onFTPUploadDone);
+    connect(m_ftpProcess, &FTPProcess::fileDeleted, this, &MainWindow::onFTPFileDeleted);
+    connect(m_ftpProcess, &FTPProcess::uploadError, this, &MainWindow::onFTPUploadError);
+    connect(m_ftpProcess, &FTPProcess::connectedChanged, this, &MainWindow::onFTPConnectedChanged);
+    connect(m_ftpProcess, &FTPProcess::logMessage, this, &MainWindow::onFTPLog);
 
-    // Initial device scan
+    // Initial scan
     for (const USBDevice& dev : m_usbMonitor->currentDevices()) {
         QTimer::singleShot(500, this, [this, dev]() {
             onDeviceInserted(dev);
@@ -139,23 +125,30 @@ MainWindow::MainWindow(QWidget* parent)
     // Status bar timer
     QTimer* statusTimer = new QTimer(this);
     connect(statusTimer, &QTimer::timeout, this, &MainWindow::updateStatusBar);
-    statusTimer->start(2000);
+    statusTimer->start(3000);
 
     m_logPanel->appendInfo("服务已启动，等待 USB 设备...");
 }
 
 MainWindow::~MainWindow() {
-    m_ftpUploader->stop();
+    // Kill all dump processes
+    for (DumpProcess* proc : m_dumpProcesses.values()) {
+        proc->sendCancel();
+    }
+    if (m_ftpProcess) {
+        m_ftpProcess->sendCancelAll();
+    }
 }
 
 void MainWindow::onDeviceInserted(const USBDevice& dev) {
     QString drive = dev.driveLetter;
-    m_logPanel->appendInfo(QString("%1 插入，容量 %2GB，已用 %3%")
+    double usedPct = dev.totalSize > 0 ? (dev.usedSize() * 100.0 / dev.totalSize) : 0;
+    m_logPanel->appendInfo(QString("%1 插入 | 容量 %2GB | 已用 %3% | 剩余 %4")
         .arg(drive)
         .arg(dev.totalSize / 1024.0 / 1024 / 1024, 0, 'f', 1)
-        .arg(int(dev.usedPercent())));
+        .arg(int(usedPct))
+        .arg(formatSize(dev.freeSpace)));
     allocateCard(drive, dev);
-    onSettingsClicked(); // force settings check on first insertion
 }
 
 void MainWindow::onDeviceRemoved(const QString& drive) {
@@ -168,15 +161,43 @@ void MainWindow::allocateCard(const QString& drive, const USBDevice& dev) {
         if (card->property("drive").toString().isEmpty()) {
             m_driveToCard[drive] = card;
             card->setProperty("drive", drive);
-            card->setDrive(drive, dev.label, dev.totalSize, dev.usedSize());
+            card->setDrive(drive, dev.label, dev.totalSize, dev.usedSize(), dev.freeSpace);
             card->setStatus("copying");
-            m_copyEngine->startCopy(drive);
+            startDumpProcess(drive);
             return;
         }
     }
 }
 
+void MainWindow::startDumpProcess(const QString& drive) {
+    if (m_dumpProcesses.contains(drive)) return;
+
+    DumpProcess* proc = new DumpProcess(drive, this);
+    m_dumpProcesses[drive] = proc;
+    m_activeDumpCount++;
+    updateDumpStatusLabel();
+
+    connect(proc, &DumpProcess::scanStarted, this, &MainWindow::onDumpScanStarted);
+    connect(proc, &DumpProcess::scanDone, this, &MainWindow::onDumpScanDone);
+    connect(proc, &DumpProcess::copyProgress, this, &MainWindow::onDumpCopyProgress);
+    connect(proc, &DumpProcess::copyFileDone, this, &MainWindow::onDumpCopyFileDone);
+    connect(proc, &DumpProcess::copyAllDone, this, &MainWindow::onDumpCopyAllDone);
+    connect(proc, &DumpProcess::error, this, &MainWindow::onDumpError);
+    connect(proc, &DumpProcess::finished, this, [this, drive]() {
+        onDumpFinished(drive);
+    });
+}
+
 void MainWindow::releaseCard(const QString& drive) {
+    // Cancel dump process if running
+    DumpProcess* proc = m_dumpProcesses.take(drive);
+    if (proc) {
+        proc->sendCancel();
+        proc->deleteLater();
+        m_activeDumpCount--;
+        updateDumpStatusLabel();
+    }
+
     USBCard* card = m_driveToCard.take(drive);
     if (card) {
         card->clear();
@@ -184,46 +205,142 @@ void MainWindow::releaseCard(const QString& drive) {
     }
 }
 
-void MainWindow::onCopyProgress(const QString& drive, int done, int total, const CopyTask& task) {
+void MainWindow::onDumpScanStarted(const QString& drive) {
     USBCard* card = m_driveToCard.value(drive, nullptr);
     if (card) {
-        card->updateProgress(done, total, task.progress);
-        // Show current file name
-        QString fname = task.srcPath;
+        m_logPanel->appendInfo(drive + " 正在扫描视频文件...");
+    }
+}
+
+void MainWindow::onDumpScanDone(const QString& drive, int totalFiles, qint64 totalSize) {
+    USBCard* card = m_driveToCard.value(drive, nullptr);
+    if (card) {
+        m_logPanel->appendInfo(QString("%1 扫描完成: %2 个文件 (%3)")
+            .arg(drive).arg(totalFiles).arg(formatSize(totalSize)));
+    }
+}
+
+void MainWindow::onDumpCopyProgress(const QString& drive, const QString& file,
+                                    int fileIndex, int fileTotal,
+                                    double fileProgress, double speedMBps, int etaSeconds) {
+    USBCard* card = m_driveToCard.value(drive, nullptr);
+    if (card) {
+        // Extract filename
+        QString fname = file;
         int p = fname.lastIndexOf('/');
         if (p < 0) p = fname.lastIndexOf('\\');
         if (p >= 0) fname = fname.mid(p + 1);
-        card->setCurrentFile(fname);
-        if (task.status == "copied") {
-            m_logPanel->appendInfo("复制完成: " + task.srcPath);
-        }
+
+        card->updateProgress(fileIndex, fileTotal, fileProgress, speedMBps, etaSeconds, fname);
     }
 }
 
-void MainWindow::onCopyDone(const QString& drive, const QList<CopyTask>& tasks) {
-    // Refresh pending list with all copied files
-    refreshPendingList();
+void MainWindow::onDumpCopyFileDone(const QString& drive, const QString& file,
+                                    int fileIndex, int fileTotal) {
     USBCard* card = m_driveToCard.value(drive, nullptr);
     if (!card) return;
 
-    int copied = 0, errors = 0;
-    for (const CopyTask& t : tasks) {
-        if (t.status == "copied") copied++;
-        else if (t.status == "error") errors++;
+    // Add to upload queue
+    QString fname = file;
+    int p = fname.lastIndexOf('/');
+    if (p < 0) p = fname.lastIndexOf('\\');
+    if (p >= 0) fname = fname.mid(p + 1);
+
+    Config& cfg = Config::instance();
+    cfg.load();
+    QString localPath = cfg.localPath(drive);
+    QString subPath = cfg.ftpConfig().value("sub_path").toString("/");
+
+    // Find the record for this file
+    QList<FileRecord> pending = FileRecordDB::instance().pendingRecords();
+    for (const FileRecord& rec : pending) {
+        if (rec.localPath.contains(fname) || rec.filePath == file) {
+            // Send to FTP process
+            FTPUploadTask task;
+            task.recordId = rec.id;
+            task.localPath = rec.localPath;
+            task.remotePath = subPath + "/" + QFileInfo(rec.localPath).fileName();
+            task.fileSize = rec.fileSize;
+            task.status = "pending";
+            m_ftpProcess->sendUpload(task);
+            m_uploadQueue->updateFileStatus(rec.id, "uploading");
+            break;
+        }
     }
-    m_logPanel->appendInfo(QString("%1 复制完成: %2个成功，%3个失败").arg(drive).arg(copied).arg(errors));
-    card->setStatus("done");
+
+    m_logPanel->appendDebug(QString("%1 [%2/%3] 复制完成: %4")
+        .arg(drive).arg(fileIndex).arg(fileTotal).arg(fname));
+}
+
+void MainWindow::onDumpCopyAllDone(const QString& drive) {
+    USBCard* card = m_driveToCard.value(drive, nullptr);
+    if (card) {
+        card->setStatus("done");
+        m_logPanel->appendInfo(drive + " 全部复制完成");
+    }
     updateStatusBar();
 }
 
-void MainWindow::onUploadDone(const UploadTask& task) {
-    refreshPendingList();
-    if (task.status == "uploaded") {
-        m_logPanel->appendInfo("上传成功: " + task.localPath);
-    } else if (task.status == "error") {
-        m_logPanel->appendError("上传失败: " + task.localPath + " - " + task.errorMsg);
+void MainWindow::onDumpError(const QString& drive, const QString& msg) {
+    USBCard* card = m_driveToCard.value(drive, nullptr);
+    if (card) {
+        card->setStatus("done");
     }
+    m_logPanel->appendError(drive + " 错误: " + msg);
+}
+
+void MainWindow::onDumpFinished(const QString& drive) {
+    DumpProcess* proc = m_dumpProcesses.take(drive);
+    if (proc) {
+        proc->deleteLater();
+        m_activeDumpCount--;
+        updateDumpStatusLabel();
+    }
+}
+
+void MainWindow::updateDumpStatusLabel() {
+    if (m_dumpStatusLabel) {
+        m_dumpStatusLabel->setText(QString("转储: %1个进行中").arg(m_activeDumpCount));
+    }
+}
+
+void MainWindow::onFTPUploadProgress(int recordId, qint64 uploadedBytes, qint64 totalBytes) {
+    m_uploadQueue->updateFileStatus(recordId, "uploading", uploadedBytes);
+}
+
+void MainWindow::onFTPUploadDone(int recordId) {
+    m_uploadQueue->updateFileStatus(recordId, "uploaded");
+    FileRecordDB::instance().updateStatus(recordId, "uploaded");
+    m_logPanel->appendInfo("上传成功 [record=" + QString::number(recordId) + "]");
     updateStatusBar();
+}
+
+void MainWindow::onFTPFileDeleted(int recordId) {
+    m_uploadQueue->updateFileStatus(recordId, "deleted");
+    FileRecordDB::instance().updateStatus(recordId, "deleted");
+    m_logPanel->appendInfo("本地文件已删除 [record=" + QString::number(recordId) + "]");
+}
+
+void MainWindow::onFTPUploadError(int recordId, const QString& msg) {
+    m_uploadQueue->updateFileStatus(recordId, "error");
+    FileRecordDB::instance().updateStatus(recordId, "error", msg);
+    m_logPanel->appendError("上传失败 [record=" + QString::number(recordId) + "]: " + msg);
+    updateStatusBar();
+}
+
+void MainWindow::onFTPConnectedChanged(bool connected) {
+    m_ftpConnected = connected;
+    if (connected) {
+        m_ftpStatusLabel->setText("FTP: ●已连接");
+        m_ftpStatusLabel->setStyleSheet("color: #4CAF50; font-size: 12px; padding: 0 8px;");
+    } else {
+        m_ftpStatusLabel->setText("FTP: ○未连接");
+        m_ftpStatusLabel->setStyleSheet("color: #9e9e9e; font-size: 12px; padding: 0 8px;");
+    }
+}
+
+void MainWindow::onFTPLog(const QString& msg) {
+    m_logPanel->appendDebug(msg);
 }
 
 void MainWindow::onFormatClicked(const QString& drive) {
@@ -253,98 +370,64 @@ void MainWindow::onEjectClicked(const QString& drive) {
     m_logPanel->appendInfo(ok ? ("已弹出: " + drive) : ("弹出失败: " + drive));
 }
 
-void MainWindow::onCancelClicked(const QString& drive) {
-    m_copyEngine->cancelCopy(drive);
-    m_logPanel->appendWarning("已取消复制: " + drive);
+void MainWindow::onCancelDumpClicked(const QString& drive) {
+    DumpProcess* proc = m_dumpProcesses.value(drive, nullptr);
+    if (proc) {
+        proc->sendCancel();
+        m_logPanel->appendWarning("已取消复制: " + drive);
+    }
     USBCard* card = m_driveToCard.value(drive, nullptr);
     if (card) card->setStatus("idle");
 }
 
 void MainWindow::onSettingsClicked() {
-    // Check if password is set
     Config& cfg = Config::instance();
     cfg.load();
+
+    // First check if password is set
     if (!cfg.isPasswordSet()) {
-        QMessageBox::warning(this, "请先设置密码",
-            "请先设置加密密码，再配置 FTP。\n\n"
-            "打开「设置 ⚙」→「加密密码」输入密码后保存。");
+        // No password set - ask to set one
+        PasswordDialog dlg(PasswordDialog::SetNew, this);
+        if (dlg.exec() == QDialog::Accepted) {
+            // Password set, now open settings
+            SettingsDialog settingsDlg(this);
+            settingsDlg.exec();
+        }
+        return;
     }
-    SettingsDialog dlg(this);
-    dlg.exec();
-}
 
-void MainWindow::refreshPendingList() {
-    if (!m_pendingList) return;
-    Config& cfg = Config::instance();
-    cfg.load();
+    // Password is set - ask for it
+    PasswordDialog dlg(PasswordDialog::Verify, this);
+    int result = dlg.exec();
 
-    m_pendingList->setRowCount(0);
-    QList<FileRecord> pending = FileRecordDB::instance().pendingRecords();
+    if (dlg.wasReset()) {
+        // User reset password - show main window again
+        QMessageBox::information(this, "已重置", "配置已清空，请重启程序。");
+        QApplication::quit();
+        return;
+    }
 
-    for (const FileRecord& r : pending) {
-        int row = m_pendingList->rowCount();
-        m_pendingList->insertRow(row);
-
-        // Drive
-        QTableWidgetItem* driveItem = new QTableWidgetItem(r.usbDrive);
-        driveItem->setForeground(QColor("#FF9800"));
-        m_pendingList->setItem(row, 0, driveItem);
-
-        // File name (extract just filename from path)
-        QString fname = r.filePath;
-        int slashPos = fname.lastIndexOf('/');
-        if (slashPos < 0) slashPos = fname.lastIndexOf('\\');
-        if (slashPos >= 0) fname = fname.mid(slashPos + 1);
-        QTableWidgetItem* nameItem = new QTableWidgetItem(fname);
-        nameItem->setForeground(QColor("#d4d4d4"));
-        m_pendingList->setItem(row, 1, nameItem);
-
-        // Size
-        QString sizeStr;
-        qint64 sz = r.fileSize;
-        if (sz >= 1024*1024*1024) sizeStr = QString::number(sz/1024.0/1024/1024,'f',1)+"GB";
-        else if (sz >= 1024*1024) sizeStr = QString::number(sz/1024.0/1024,'f',1)+"MB";
-        else if (sz >= 1024) sizeStr = QString::number(sz/1024.0,'f',1)+"KB";
-        else sizeStr = QString::number(sz)+"B";
-        m_pendingList->setItem(row, 2, new QTableWidgetItem(sizeStr));
-
-        // Status
-        QString statusText;
-        QColor statusColor;
-        if (r.status == "pending") { statusText = "待上传"; statusColor = QColor("#FF9800"); }
-        else if (r.status == "copying") { statusText = "复制中"; statusColor = QColor("#2196F3"); }
-        else if (r.status == "copied") { statusText = "已复制"; statusColor = QColor("#4CAF50"); }
-        else if (r.status == "uploading") { statusText = "上传中"; statusColor = QColor("#2196F3"); }
-        else if (r.status == "uploaded") { statusText = "已上传"; statusColor = QColor("#4CAF50"); }
-        else if (r.status == "error") { statusText = "错误"; statusColor = QColor("#F44336"); }
-        else { statusText = r.status; statusColor = QColor("#9e9e9e"); }
-        QTableWidgetItem* statusItem = new QTableWidgetItem(statusText);
-        statusItem->setForeground(statusColor);
-        m_pendingList->setItem(row, 3, statusItem);
+    if (result == QDialog::Accepted) {
+        SettingsDialog settingsDlg(this);
+        settingsDlg.exec();
     }
 }
 
-QString MainWindow::formatSize(qint64 b) {
+void MainWindow::updateStatusBar() {
+    auto pending = FileRecordDB::instance().pendingCountAndSize();
+    auto uploaded = FileRecordDB::instance().uploadedCountAndSize();
+
+    statusBar()->showMessage(
+        QString("  待上传: %1个 (%2)  |  已上传: %3个 (%4)  |  FTP: %5")
+            .arg(pending.first).arg(formatSize(pending.second))
+            .arg(uploaded.first).arg(formatSize(uploaded.second))
+            .arg(m_ftpConnected ? "●已连接" : "○未连接")
+    );
+}
+
+QString MainWindow::formatSize(qint64 b) const {
     if (b >= 1024*1024*1024) return QString::number(b/1024.0/1024/1024,'f',1) + "GB";
     if (b >= 1024*1024) return QString::number(b/1024.0/1024,'f',1) + "MB";
     if (b >= 1024) return QString::number(b/1024.0,'f',1) + "KB";
     return QString::number(b) + "B";
-}
-
-void MainWindow::updateStatusBar() {
-    // Only refresh pending list every 10 seconds to avoid DB overhead
-    static int tick = 0;
-    if (++tick % 5 == 0) {
-        refreshPendingList();
-    }
-    auto pending = FileRecordDB::instance().pendingCountAndSize();
-    auto uploaded = FileRecordDB::instance().uploadedCountAndSize();
-    int queue = m_ftpUploader ? m_ftpUploader->queueSize() : 0;
-
-    statusBar()->showMessage(
-        QString("  待上传: %1个 (%2)  |  已上传: %3个 (%4)  |  队列: %5")
-            .arg(pending.first).arg(formatSize(pending.second))
-            .arg(uploaded.first).arg(formatSize(uploaded.second))
-            .arg(queue)
-    );
 }
