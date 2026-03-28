@@ -1,0 +1,28 @@
+# Build outputs
+build/
+dist/
+out/
+
+# Executables
+*.exe
+test.exe
+
+# IDE
+.vs/
+
+# Node (if using npm packages)
+node_modules/
+package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Qt
+*.autogen/
+*.moc/
+*.obj/
+*.o/
+*.a/
+*.pri
+*.pro.user
