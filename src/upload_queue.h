@@ -30,11 +30,18 @@ public:
     // Add a folder with its files
     void addFolder(const QString& folderPath, const QList<UploadFileItem>& files);
 
+    // Add a single file (creates folder if needed)
+    void addFile(int recordId, const QString& drive, const QString& usbPath,
+                 const QString& localPath, qint64 fileSize);
+
     // Update file status
     void updateFileStatus(int recordId, const QString& status, qint64 uploadedBytes = -1);
 
     // Clear all items
     void clearAll();
+
+    // Clear completed items only
+    void clearCompleted();
 
     // Get folder count
     int folderCount() const;

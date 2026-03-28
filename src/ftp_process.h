@@ -3,12 +3,11 @@
 
 #include <QObject>
 #include <QString>
-#include <QProcess>
-#include <QJsonObject>
-#include <QList>
+#include <QQueue>
 #include <QMutex>
+#include <QTcpSocket>
+#include <QFile>
 
-// FTP task structure
 struct FTPUploadTask {
     int recordId = 0;
     QString localPath;
@@ -17,39 +16,74 @@ struct FTPUploadTask {
     QString status;
 };
 
+enum FTPState {
+    Idle,
+    Connecting,
+    Authenticating,
+    Connected,
+    WaitingPASV,
+    WaitingSTOR,
+    Uploading,
+    Disconnecting
+};
+
 class FTPProcess : public QObject {
     Q_OBJECT
 public:
     explicit FTPProcess(QObject* parent = nullptr);
     ~FTPProcess();
 
-    // Send upload task to subprocess
     void sendUpload(const FTPUploadTask& task);
     void sendCancelAll();
-
-    bool isConnected() const { return m_connected; }
 
 signals:
     void uploadProgress(int recordId, qint64 uploadedBytes, qint64 totalBytes);
     void uploadDone(int recordId);
-    void fileDeleted(int recordId);
+    void fileDeleted(int recordId, const QString& localPath);
     void uploadError(int recordId, const QString& msg);
     void connectedChanged(bool connected);
     void logMessage(const QString& msg);
 
 private slots:
-    void onReadyRead();
-    void onFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void onConnected();
+    void onCmdReadyRead();
+    void onDisconnected();
+    void onSocketError(QAbstractSocket::SocketError err);
+    void onDataConnected();
+    void onDataBytesWritten(qint64 bytes);
+    void onDataDisconnected();
 
 private:
-    void startSubprocess();
-    void handleJson(const QJsonObject& obj);
+    void processNext();
+    void connectToHost();
+    void enterPassiveMode();
+    void ensureRemoteDir(const QString& remotePath);
+    void sendMkdirSync(const QString& path);
+    void enterPassiveModeStep2();
+    void startUpload();
+    void sendFileData();
+    void finishUpload();
+    void cleanupAndNext();
+    void disconnectFromHost();
+    void handleResponse(const QString& line);
+    void removeEmptyParentDirs(const QString& filePath);
 
-    QProcess* m_process = nullptr;
+    QQueue<FTPUploadTask> m_queue;
     QMutex m_mutex;
-    QList<FTPUploadTask> m_pendingQueue;
-    bool m_started = false;
-    bool m_connected = false;
+    FTPUploadTask* m_currentTask = nullptr;
+
+    QTcpSocket* m_cmdSocket = nullptr;
+    QTcpSocket* m_dataSocket = nullptr;
+
+    QString m_dataHost;
+    int m_dataPort = 0;
+    QString m_user;
+    QString m_pass;
+
+    qint64 m_bytesTotal = 0;
+    qint64 m_bytesWritten = 0;
+    FTPState m_state = Idle;
+    QFile m_file;
 };
 
 #endif // FTP_PROCESS_H

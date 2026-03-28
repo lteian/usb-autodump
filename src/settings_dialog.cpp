@@ -12,25 +12,77 @@
 #include <QApplication>
 #include <QStandardPaths>
 #include <QRegExp>
+#include <QGroupBox>
+#include <QTcpSocket>
+#include <QTimer>
+#include <QEventLoop>
+#include <QThread>
+#include <QJsonArray>
 
 SettingsDialog::SettingsDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle("⚙ 设置");
+    setWindowTitle("设置");
     setMinimumWidth(540);
     setStyleSheet(R"(
-        QDialog { background: #1e1e1e; color: #e0e0e0; }
-        QLabel { color: #e0e0e0; }
-        QLineEdit { background: #2d2d2d; color: #e0e0e0; border: 1px solid #4a4a4a; padding: 6px; border-radius: 4px; }
-        QCheckBox { color: #e0e0e0; }
-        QSpinBox { background: #2d2d2d; color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 4px; }
-        QTableWidget { background: #2d2d2d; color: #e0e0d4d4; gridline-color: #4a4a4a; }
-        QHeaderView::section { background: #2d2d2d; color: #e0e0e0; border: 1px solid #4a4a4a; }
-        QTabWidget::pane { border: 1px solid #4a4a4a; border-radius: 4px; }
-        QTabBar::tab { background: #2d2d2d; color: #9e9e9e; padding: 6px 12px; }
-        QTabBar::tab:selected { background: #424242; color: white; }
-        QPushButton { background: #424242; color: white; border: none; border-radius: 4px; padding: 6px 12px; }
-        QPushButton:hover { background: #616161; }
+        QDialog { background: #F3F4F6; color: #374151; }
+        QLabel { color: #374151; }
+        QLineEdit {
+            background: #FFFFFF;
+            color: #374151;
+            border: 1px solid #E5E7EB;
+            padding: 6px;
+            border-radius: 6px;
+        }
+        QLineEdit:focus { border-color: #3B82F6; }
+        QCheckBox { color: #374151; }
+        QSpinBox {
+            background: #FFFFFF;
+            color: #374151;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+            padding: 4px;
+        }
+        QTableWidget {
+            background: #FFFFFF;
+            color: #374151;
+            gridline-color: #E5E7EB;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+        }
+        QHeaderView::section {
+            background: #F9FAFB;
+            color: #6B7280;
+            border: none;
+            border-bottom: 1px solid #E5E7EB;
+            padding: 6px;
+        }
+        QTabWidget::pane {
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            background: #FFFFFF;
+        }
+        QTabBar::tab {
+            background: #F3F4F6;
+            color: #6B7280;
+            padding: 8px 16px;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+        }
+        QTabBar::tab:selected {
+            background: #FFFFFF;
+            color: #374151;
+            font-weight: 500;
+        }
+        QPushButton {
+            background: #FFFFFF;
+            color: #374151;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 13px;
+        }
+        QPushButton:hover { background: #F9FAFB; }
     )");
 
     QVBoxLayout* vl = new QVBoxLayout(this);
@@ -38,11 +90,23 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     // ── Encryption Warning ───────────────────────────────
     m_encWarn = new QLabel();
     m_encWarn->setVisible(false);
-    m_encWarn->setStyleSheet("background: #FF9800; color: #1e1e1e; padding: 10px 14px; border-radius: 6px; font-weight: bold;");
+    m_encWarn->setStyleSheet("background: #FEF3C7; color: #92400E; padding: 10px 14px; border-radius: 6px; font-weight: 500;");
     vl->addWidget(m_encWarn);
 
     // ── Encryption Password ────────────────────────────────
-    QGroupBox* encGrp = new QGroupBox("🔐 加密密码");
+    QGroupBox* encGrp = new QGroupBox("加密密码");
+    encGrp->setStyleSheet(R"(
+        QGroupBox {
+            background: #FFFFFF;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 4px;
+            font-weight: 600;
+            color: #374151;
+        }
+        QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }
+    )");
     QVBoxLayout* encVl = new QVBoxLayout();
 
     QHBoxLayout* r1 = new QHBoxLayout();
@@ -61,7 +125,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     encVl->addLayout(r2);
 
     m_encError = new QLabel();
-    m_encError->setStyleSheet("color: #F44336;");
+    m_encError->setStyleSheet("color: #EF4444;");
     encVl->addWidget(m_encError);
     encGrp->setLayout(encVl);
     vl->addWidget(encGrp);
@@ -78,6 +142,10 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     m_localPathEdit = new QLineEdit();
     m_localPathEdit->setReadOnly(true);
     QPushButton* browseBtn = new QPushButton("浏览...");
+    browseBtn->setStyleSheet(R"(
+        QPushButton { background: #3B82F6; color: white; border: none; border-radius: 6px; padding: 6px 14px; }
+        QPushButton:hover { background: #2563EB; }
+    )");
     connect(browseBtn, &QPushButton::clicked, this, &SettingsDialog::onBrowseLocalPath);
     lpRow->addWidget(m_localPathEdit);
     lpRow->addWidget(browseBtn);
@@ -113,6 +181,15 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     ftpFl->addRow("密码:", m_ftpPass);
     ftpFl->addRow("子路径:", m_ftpSubPath);
     ftpFl->addRow("", m_ftpTls);
+
+    QPushButton* testBtn = new QPushButton("测试FTP连接");
+    testBtn->setStyleSheet(R"(
+        QPushButton { background: #3B82F6; color: white; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; }
+        QPushButton:hover { background: #2563EB; }
+    )");
+    connect(testBtn, &QPushButton::clicked, this, &SettingsDialog::onTestFTP);
+    ftpFl->addRow("", testBtn);
+
     ftpTab->setLayout(ftpFl);
 
     // ── Advanced Tab ─────────────────────────────────────
@@ -147,6 +224,10 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     QPushButton* saveBtn = new QPushButton("保存");
     saveBtn->setDefault(true);
+    saveBtn->setStyleSheet(R"(
+        QPushButton { background: #3B82F6; color: white; border: none; border-radius: 6px; padding: 6px 16px; font-size: 13px; }
+        QPushButton:hover { background: #2563EB; }
+    )");
     connect(saveBtn, &QPushButton::clicked, this, &SettingsDialog::onSave);
     btnRow->addWidget(cancelBtn);
     btnRow->addWidget(saveBtn);
@@ -160,7 +241,7 @@ void SettingsDialog::loadCurrentConfig() {
     cfg.load();
 
     if (!cfg.isPasswordSet()) {
-        m_encWarn->setText("⚠️ 请先设置加密密码（用于加密 FTP 密码）");
+        m_encWarn->setText("请先设置加密密码（用于加密 FTP 密码）");
         m_encWarn->setVisible(true);
     }
 
@@ -192,7 +273,6 @@ void SettingsDialog::onBrowseLocalPath() {
 }
 
 void SettingsDialog::onSave() {
-    // Validate encryption password
     QString newPwd = m_encPwdEdit->text();
     QString confirmPwd = m_encPwd2Edit->text();
     QString oldEncPwd = Config::instance().encryptionPassword();
@@ -208,7 +288,6 @@ void SettingsDialog::onSave() {
         }
     }
 
-    // Collect USB paths
     QMap<QString, QString> usbPaths;
     for (int r = 0; r < m_usbPathsTable->rowCount(); ++r) {
         QTableWidgetItem* di = m_usbPathsTable->item(r, 0);
@@ -220,7 +299,6 @@ void SettingsDialog::onSave() {
         }
     }
 
-    // Encrypt FTP password if set
     QString ftpPass = m_ftpPass->text().trimmed();
     if (!ftpPass.isEmpty()) {
         if (newPwd.isEmpty() && oldEncPwd.isEmpty()) {
@@ -229,7 +307,6 @@ void SettingsDialog::onSave() {
         }
         QString encPwd = newPwd.isEmpty() ? oldEncPwd : newPwd;
         ftpPass = Crypto::encrypt(ftpPass, encPwd);
-        // Also update verification token
         if (!newPwd.isEmpty()) {
             QString token = Crypto::encrypt("USB_AUTO_DUMP_VERIFY_TOKEN_v1", newPwd);
             Config::instance().setPasswordVerificationToken(token);
@@ -249,22 +326,24 @@ void SettingsDialog::onSave() {
     if (!ftpPass.isEmpty()) {
         ftp["password"] = ftpPass;
     } else {
-        ftp["password"] = cfg.ftpConfig().value("password"); // keep old
+        ftp["password"] = cfg.ftpConfig().value("password");
     }
     ftp["sub_path"] = m_ftpSubPath->text().trimmed().replace(QRegExp("/+$"), "");
     ftp["use_tls"] = m_ftpTls->isChecked();
     ftp["max_retry"] = m_retrySpin->value();
 
-    // Build root object
     QJsonObject root;
     root["local_path"] = m_localPathEdit->text().trimmed();
     root["encryption_password"] = newPwd.isEmpty() ? oldEncPwd : newPwd;
     root["ftp"] = ftp;
     root["auto_delete_local"] = m_autoDelete->isChecked();
     root["auto_format_after_copy"] = m_autoFormat->isChecked();
-    root["usb_paths"] = QJsonObject::fromVariantMap(usbPaths);
+    QVariantMap vmUsbPaths;
+    for (auto it = usbPaths.constBegin(); it != usbPaths.constEnd(); ++it) {
+        vmUsbPaths[it.key()] = it.value();
+    }
+    root["usb_paths"] = QJsonObject::fromVariantMap(vmUsbPaths);
 
-    // Keep video extensions
     QJsonArray exts;
     for (const QString& e : cfg.videoExtensions()) exts.append(e);
     root["video_extensions"] = exts;
@@ -273,4 +352,123 @@ void SettingsDialog::onSave() {
 
     QMessageBox::information(this, "保存成功", "配置已保存！");
     accept();
+}
+
+void SettingsDialog::onResetAll() {
+    reject();
+}
+
+void SettingsDialog::onTestFTP() {
+    QString host = m_ftpHost->text().trimmed();
+    int port = m_ftpPort->value();
+    QString user = m_ftpUser->text().trimmed();
+    QString pass = m_ftpPass->text();
+    bool useTls = m_ftpTls->isChecked();
+
+    if (host.isEmpty()) {
+        QMessageBox::warning(this, "FTP测试", "服务器地址不能为空");
+        return;
+    }
+    if (user.isEmpty()) {
+        QMessageBox::warning(this, "FTP测试", "用户名不能为空");
+        return;
+    }
+    if (pass.isEmpty()) {
+        Config& cfg = Config::instance();
+        cfg.load();
+        QJsonObject ftp = cfg.ftpConfig();
+        pass = ftp.value("password").toString();
+        if (!pass.isEmpty() && cfg.isPasswordSet()) {
+            pass = Crypto::decrypt(pass, cfg.encryptionPassword());
+        }
+    }
+
+    QMessageBox::information(this, "FTP测试", QString("正在连接 %1:%2 ...").arg(host).arg(port));
+
+    QTcpSocket* sock = new QTcpSocket(this);
+    QTimer timeoutTimer;
+    timeoutTimer.setSingleShot(true);
+    timeoutTimer.connect(&timeoutTimer, &QTimer::timeout, [sock]() { sock->abort(); });
+    timeoutTimer.start(15000);
+
+    sock->connectToHost(host, port);
+
+    QEventLoop loop;
+    QObject::connect(sock, &QTcpSocket::readyRead, &loop, &QEventLoop::quit);
+    QObject::connect(sock, QOverload<QAbstractSocket::SocketError>::of(&QTcpSocket::errorOccurred), &loop, &QEventLoop::quit);
+    QObject::connect(sock, &QTcpSocket::disconnected, &loop, &QEventLoop::quit);
+    loop.exec();
+    timeoutTimer.stop();
+
+    if (sock->state() != QAbstractSocket::ConnectedState) {
+        QMessageBox::critical(this, "FTP测试", QString("连接失败：%1\n\n"
+            "请检查：\n"
+            "• 服务器地址和端口是否正确\n"
+            "• 网络是否通畅\n"
+            "• FTP端口是否被防火墙拦截").arg(sock->errorString()));
+        sock->deleteLater();
+        return;
+    }
+
+    QString greeting = QString::fromUtf8(sock->readAll()).trimmed();
+    sock->write(QString("USER " + user + "\r\n").toUtf8());
+
+    QEventLoop loop2;
+    QObject::connect(sock, &QTcpSocket::readyRead, &loop2, &QEventLoop::quit);
+    QTimer::singleShot(5000, &loop2, &QEventLoop::quit);
+    loop2.exec();
+
+    QString resp = QString::fromUtf8(sock->readAll()).trimmed();
+    QStringList lines = resp.split('\n', Qt::SkipEmptyParts);
+    QString userResp;
+    for (const QString& line : lines) {
+        if (line.trimmed().startsWith("331")) {
+            userResp = line.trimmed();
+            break;
+        }
+    }
+    if (userResp.isEmpty()) userResp = resp;
+
+    qDebug() << "USER response raw:" << resp;
+    qDebug() << "USER response extracted:" << userResp;
+
+    if (!userResp.startsWith("331")) {
+        QMessageBox::critical(this, "FTP测试",
+            QString("用户名验证失败：\n%1\n\n请检查用户名是否正确").arg(userResp));
+        sock->write("QUIT\r\n");
+        sock->deleteLater();
+        return;
+    }
+
+    sock->write(QString("PASS " + pass + "\r\n").toUtf8());
+
+    QEventLoop loop3;
+    QObject::connect(sock, &QTcpSocket::readyRead, &loop3, &QEventLoop::quit);
+    QTimer::singleShot(5000, &loop3, &QEventLoop::quit);
+    loop3.exec();
+
+    QString passResp = QString::fromUtf8(sock->readAll()).trimmed();
+    QStringList passLines = passResp.split('\n', Qt::SkipEmptyParts);
+    QString passResult;
+    for (const QString& line : passLines) {
+        if (line.startsWith("230")) {
+            passResult = line;
+            break;
+        }
+    }
+    if (passResult.isEmpty()) passResult = passResp;
+    if (!passResult.startsWith("230")) {
+        QMessageBox::critical(this, "FTP测试",
+            QString("密码验证失败：\n%1\n\n请检查密码是否正确").arg(passResult));
+        sock->write("QUIT\r\n");
+        sock->deleteLater();
+        return;
+    }
+
+    sock->write("QUIT\r\n");
+    sock->deleteLater();
+
+    QMessageBox::information(this, "FTP测试",
+        QString("连接成功！\n\n服务器：%1\n端口：%2\n用户：%3\nTLS：%4")
+        .arg(host).arg(port).arg(user).arg(useTls ? "是" : "否"));
 }

@@ -2,7 +2,8 @@
 #include <QFile>
 #include <QDir>
 #include <QJsonDocument>
-#include <QStandardPaths>
+#include <QJsonArray>
+#include <QCoreApplication>
 
 Config& Config::instance() {
     static Config inst;
@@ -10,14 +11,9 @@ Config& Config::instance() {
 }
 
 QString Config::configFilePath() const {
-    return QDir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation))
-               .filePath("usb-autodump/config.json");
+    return QDir(QCoreApplication::applicationDirPath()).filePath("config.json");
 }
 
-QString Config::dataDirPath() const {
-    return QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
-               .absolutePath();
-}
 
 void Config::load() {
     QFile f(configFilePath());
@@ -35,10 +31,7 @@ void Config::load() {
 }
 
 void Config::save() {
-    QDir d = QDir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation));
-    if (!d.exists()) d.mkpath(".");
-    if (!d.exists("usb-autodump")) d.mkpath("usb-autodump");
-    QFile f(d.filePath("usb-autodump/config.json"));
+    QFile f(configFilePath());
     if (!f.open(QIODevice::WriteOnly)) return;
     f.write(QJsonDocument(m_data).toJson(QJsonDocument::Indented));
 }
@@ -120,11 +113,5 @@ QMap<QString, QString> Config::usbPaths() const {
 
 void Config::clearAll() {
     QFile::remove(configFilePath());
-    QDir d(dataDirPath());
-    if (d.exists()) {
-        foreach (const QString& f, d.entryList()) {
-            QFile::remove(d.filePath(f));
-        }
-    }
     m_data = QJsonObject();
 }

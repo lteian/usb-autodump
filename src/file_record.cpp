@@ -6,6 +6,7 @@
 #include <QVariant>
 #include <QFile>
 #include <QDebug>
+#include <QDateTime>
 
 class FileRecordDB::DB {
 public:
@@ -18,6 +19,11 @@ FileRecordDB::FileRecordDB() {
     d->db.setDatabaseName(dbPath());
     d->db.open();
     ensureTable();
+}
+
+FileRecordDB& FileRecordDB::instance() {
+    static FileRecordDB inst;
+    return inst;
 }
 
 QString FileRecordDB::dbPath() {
@@ -136,6 +142,20 @@ QPair<int, qint64> FileRecordDB::uploadedCountAndSize() {
            "WHERE status IN ('uploaded','deleted')");
     if (q.next()) return qMakePair(q.value(0).toInt(), q.value(1).toLongLong());
     return qMakePair(0, Q_INT64_C(0));
+}
+
+bool FileRecordDB::hasPendingUpload(const QString& localPath) {
+    QSqlQuery q(d->db);
+    q.prepare("SELECT status FROM file_records WHERE local_path=?");
+    q.bindValue(0, localPath);
+    q.exec();
+    if (q.next()) {
+        QString s = q.value(0).toString();
+        // Already queued or done - skip
+        if (s == "pending" || s == "uploading" || s == "copied" || s == "uploaded")
+            return true;
+    }
+    return false;
 }
 
 void FileRecordDB::clearAll() {

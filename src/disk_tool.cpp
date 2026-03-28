@@ -1,4 +1,5 @@
 #include "disk_tool.h"
+#include "disk_tool.h"
 #include <QProcess>
 #include <QDebug>
 #include <QCoreApplication>
@@ -6,6 +7,8 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <winioctl.h>
+#else
+#include <sys/statvfs.h>
 #endif
 
 bool DiskTool::formatDrive(const QString& drive, const QString& fs, const QString& label) {
@@ -83,5 +86,29 @@ bool DiskTool::ejectDrive(const QString& drive) {
     p.start("umount", QStringList() << device);
     p.waitForFinished(30000);
     return p.exitCode() == 0;
+#endif
+}
+
+bool DiskTool::getDiskSpace(const QString& path, qint64& freeBytes, qint64& totalBytes) {
+#ifdef _WIN32
+    ULARGE_INTEGER freeBytesLarge, totalBytesLarge, totalFreeBytesLarge;
+    // Extract root from path, e.g. "D:/folder" -> "D:\"
+    QString root = path.mid(0, 2);
+    root += "\\";
+    if (GetDiskFreeSpaceExW((LPCWSTR)root.utf16(),
+                           &freeBytesLarge, &totalBytesLarge, &totalFreeBytesLarge)) {
+        freeBytes = freeBytesLarge.QuadPart;
+        totalBytes = totalBytesLarge.QuadPart;
+        return true;
+    }
+    return false;
+#else
+    struct statvfs fs;
+    if (statvfs(path.toUtf8().constData(), &fs) == 0) {
+        freeBytes = (qint64)fs.f_bavail * fs.f_frsize;
+        totalBytes = (qint64)fs.f_blocks * fs.f_frsize;
+        return true;
+    }
+    return false;
 #endif
 }

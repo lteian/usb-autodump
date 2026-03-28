@@ -8,11 +8,16 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 find_package(Qt5 REQUIRED COMPONENTS Core Widgets Network Sql)
-
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
+# Output to dist/YYYY-MM-DD/ folder
+string(TIMESTAMP BUILD_DATE "%Y-%m-%d")
+set(DIST_DIR "${CMAKE_SOURCE_DIR}/dist/${BUILD_DATE}")
+file(MAKE_DIRECTORY "${DIST_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${DIST_DIR}")
+
 # Main executable
-set(MAIN_SOURCES
+add_executable(usb-autodump WIN32
     src/main.cpp
     src/mainwindow.cpp
     src/usb_card.cpp
@@ -27,10 +32,8 @@ set(MAIN_SOURCES
     src/upload_queue.cpp
     src/dump_process.cpp
     src/ftp_process.cpp
-)
-
-add_executable(usb-autodump WIN32
-    ${MAIN_SOURCES}
+    src/disk_ring.cpp
+    src/win32_icon.rc
 )
 
 target_link_libraries(usb-autodump
@@ -40,8 +43,7 @@ target_link_libraries(usb-autodump
     Qt5::Sql
 )
 
-# Windows-specific: link against BCrypt
-if(WIN32)
+if(WIN32 AND MSVC)
     target_link_libraries(usb-autodump bcrypt)
 endif()
 

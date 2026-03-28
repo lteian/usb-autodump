@@ -29,6 +29,8 @@ signals:
                       int fileIndex, int fileTotal,
                       double fileProgress, double speedMBps, int etaSeconds);
     void copyFileDone(const QString& drive, const QString& file,
+                     const QString& localPath, const QString& relPath,
+                     qint64 fileSize,
                      int fileIndex, int fileTotal);
     void copyAllDone(const QString& drive);
     void error(const QString& drive, const QString& msg);

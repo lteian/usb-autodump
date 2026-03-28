@@ -1,5 +1,6 @@
 #include "dump_process.h"
 #include "config.h"
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <cstdio>
@@ -8,8 +9,6 @@
 // ============================================================
 // Main process side: DumpProcess wraps a QProcess
 // ============================================================
-
-#include "dump_process.h"
 
 DumpProcess::DumpProcess(const QString& drive, QObject* parent)
     : QObject(parent)
@@ -27,17 +26,25 @@ DumpProcess::~DumpProcess() {
 }
 
 void DumpProcess::startSubprocess() {
+    if (m_drive.isEmpty()) return;
+
     m_process = new QProcess(this);
     m_process->setProcessChannelMode(QProcess::SeparateChannels);
     m_process->setInputChannelMode(QProcess::ForwardedInputChannel);
 
-    // Find the executable path
+    // Use absolute path to this executable
     QString exePath = QCoreApplication::applicationFilePath();
+    if (exePath.isEmpty()) {
+        fprintf(stderr, "DumpProcess: cannot determine executable path\n");
+        return;
+    }
+
     QStringList args;
     args << "--dump-mode" << "--drive" << m_drive;
 
     connect(m_process, &QProcess::readyReadStandardOutput, this, &DumpProcess::onReadyRead);
-    connect(m_process, &QProcess::finished, this, &DumpProcess::onFinished);
+    connect(m_process, static_cast<void(QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
+            this, &DumpProcess::onFinished);
 
     m_process->start(exePath, args);
     m_started = true;
@@ -87,6 +94,9 @@ void DumpProcess::onReadyRead() {
         } else if (type == "copy_file_done") {
             emit copyFileDone(drive,
                 obj.value("file").toString(),
+                obj.value("local_path").toString(),
+                obj.value("rel_path").toString(),
+                obj.value("file_size").toVariant().toLongLong(),
                 obj.value("file_index").toInt(),
                 obj.value("file_total").toInt());
         } else if (type == "copy_all_done") {
@@ -337,3 +347,5 @@ int dumpSubProcessMain(int argc, char* argv[]) {
 }
 
 #endif // SUBPROCESS_MODE
+
+#include "dump_process.moc"

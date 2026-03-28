@@ -18,6 +18,7 @@ private slots:
     void onBrowseLocalPath();
     void onSave();
     void onResetAll();
+    void onTestFTP();
 
 private:
     void loadCurrentConfig();

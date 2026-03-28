@@ -16,15 +16,12 @@ public:
                   qint64 total, qint64 used, qint64 freeSpace);
     void setStatus(const QString& s); // idle/copying/done/formatting
 
-    // Progress update
     void updateProgress(int done, int total,
                         double fileProgress,
                         double speedMBps,
                         int etaSeconds,
                         const QString& currentFile);
 
-    void setUploadStatus(const QString& status); // idle/uploading/uploaded
-    void setUploadProgress(double pct);
     void clear();
 
     QString drive() const { return m_drive; }
@@ -38,15 +35,13 @@ private:
     QString m_drive;
     QLabel* m_driveLabel = nullptr;
     QLabel* m_statusLabel = nullptr;
+    QLabel* m_hintLabel = nullptr;       // shown when idle
     QLabel* m_sizeLabel = nullptr;
-    QLabel* m_freeSpaceLabel = nullptr;
-    QProgressBar* m_overallProgress = nullptr; // outer: done/total
-    QProgressBar* m_fileProgress = nullptr;   // inner: current file %
+    QProgressBar* m_freeSpaceBar = nullptr; // disk usage bar
+    QProgressBar* m_overallProgress = nullptr;
     QLabel* m_speedLabel = nullptr;
     QLabel* m_etaLabel = nullptr;
     QLabel* m_currentFileLabel = nullptr;
-    QLabel* m_uploadStatusLabel = nullptr;
-    QProgressBar* m_uploadProgress = nullptr;
     QPushButton* m_formatBtn = nullptr;
     QPushButton* m_ejectBtn = nullptr;
     QPushButton* m_cancelBtn = nullptr;

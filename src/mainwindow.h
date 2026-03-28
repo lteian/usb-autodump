@@ -33,6 +33,8 @@ private slots:
                            int fileIndex, int fileTotal,
                            double fileProgress, double speedMBps, int etaSeconds);
     void onDumpCopyFileDone(const QString& drive, const QString& file,
+                           const QString& localPath, const QString& relPath,
+                           qint64 fileSize,
                            int fileIndex, int fileTotal);
     void onDumpCopyAllDone(const QString& drive);
     void onDumpError(const QString& drive, const QString& msg);
@@ -40,7 +42,7 @@ private slots:
 
     void onFTPUploadProgress(int recordId, qint64 uploadedBytes, qint64 totalBytes);
     void onFTPUploadDone(int recordId);
-    void onFTPFileDeleted(int recordId);
+    void onFTPFileDeleted(int recordId, const QString& localPath);
     void onFTPUploadError(int recordId, const QString& msg);
     void onFTPConnectedChanged(bool connected);
     void onFTPLog(const QString& msg);
@@ -49,11 +51,17 @@ private slots:
     void onEjectClicked(const QString& drive);
     void onCancelDumpClicked(const QString& drive);
     void onSettingsClicked();
+    void onScanLocalDirectory();
+    void resumePendingUploads();
+    void onAbout();
     void updateStatusBar();
+    void updateQueueCount();
 
 private:
     void allocateCard(const QString& drive, const USBDevice& dev);
     void releaseCard(const QString& drive);
+    void startDumpProcess(const QString& drive);
+    void updateDumpStatusLabel();
     QString formatSize(qint64 b) const;
 
     QList<USBCard*> m_cards;
@@ -67,6 +75,7 @@ private:
     UploadQueue* m_uploadQueue = nullptr;
     QLabel* m_ftpStatusLabel = nullptr;
     QLabel* m_dumpStatusLabel = nullptr;
+    QLabel* m_queueCountLabel = nullptr;
 
     bool m_ftpConnected = false;
     int m_activeDumpCount = 0;

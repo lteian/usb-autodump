@@ -16,6 +16,9 @@
 #include <QRegExp>
 #include <QStandardPaths>
 #include <QVariant>
+#include <QSharedMemory>
+#include <QLocalServer>
+#include <QLocalSocket>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -23,25 +26,64 @@
 #include "config.h"
 #include "crypto.h"
 
+// Ensure only one instance runs as main process
+// Subprocesses (--dump-mode / --ftp-mode) bypass this check
+static bool s_isSubprocess = false;
+
+static bool checkSingleInstance() {
+    // Try to connect to an existing server
+    QLocalSocket socket;
+    socket.connectToServer("USB-AutoDumper-Main");
+    if (socket.waitForConnected(500)) {
+        // Another instance is already running as main process
+        return false;
+    }
+
+    // No existing instance - we become the server
+    QLocalServer server;
+    server.setSocketOptions(QLocalServer::UserAccessOption);
+    if (!server.listen("USB-AutoDumper-Main")) {
+        // Maybe another process started at the same time - try connect again
+        socket.connectToServer("USB-AutoDumper-Main");
+        if (socket.waitForConnected(500)) return false;
+        // Could not bind, assume we're subprocess
+        return false;
+    }
+    return true;
+}
+
 int main(int argc, char *argv[]) {
+    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
     QApplication a(argc, argv);
     a.setApplicationName("USB自动转储工具");
     a.setOrganizationName("usb-autodump");
 
-    // Check for subprocess modes
+    // Check for subprocess modes FIRST
     bool dumpMode = false;
     bool ftpMode = false;
     QString drive;
 
-    for (int i = 0; i < argc - 1; ++i) {
+    for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--dump-mode") == 0) {
             dumpMode = true;
+            s_isSubprocess = true;
         }
-        if (strcmp(argv[i], "--drive") == 0) {
+        if (strcmp(argv[i], "--drive") == 0 && i + 1 < argc) {
             drive = argv[i + 1];
         }
         if (strcmp(argv[i], "--ftp-mode") == 0) {
             ftpMode = true;
+            s_isSubprocess = true;
+        }
+    }
+
+    // Only main process (non-subprocess) checks single instance
+    // This prevents the main app from starting multiple times
+    if (!s_isSubprocess) {
+        if (!checkSingleInstance()) {
+            // Another instance is already running - just exit silently
+            return 0;
         }
     }
 
@@ -96,7 +138,7 @@ int main(int argc, char *argv[]) {
                     return;
                 }
 
-                QList<QPair<QString,QString>> tasks;
+                QList<QPair<QString,QString>> tasks; // (srcPath, relPath)
                 qint64 totalSize = 0;
                 int totalFiles = 0;
 
@@ -116,8 +158,9 @@ int main(int argc, char *argv[]) {
                             if (m_videoExts.contains(ext)) {
                                 QString srcPath = fi.absoluteFilePath();
                                 QString relPath = QDir(m_drive).relativeFilePath(srcPath);
-                                QString dstPath = QDir(m_localBase + "/" + m_drive).absoluteFilePath(relPath);
-                                tasks.append(qMakePair(srcPath, dstPath));
+                                // relPath is like "子文件夹/video.mp4" (no drive letter)
+                                QString dstPath = QDir(m_localBase).filePath(relPath);
+                                tasks.append(qMakePair(srcPath, relPath));
                                 totalSize += fi.size();
                                 totalFiles++;
                             }
@@ -135,7 +178,8 @@ int main(int argc, char *argv[]) {
                 // Copy files
                 for (int i = 0; i < tasks.size(); ++i) {
                     const QString& srcPath = tasks[i].first;
-                    const QString& dstPath = tasks[i].second;
+                    const QString& relPath = tasks[i].second;
+                    const QString dstPath = QDir(m_localBase).filePath(relPath);
 
                     QFileInfo dstInfo(dstPath);
                     QDir dstDir = dstInfo.absoluteDir();
@@ -187,6 +231,9 @@ int main(int argc, char *argv[]) {
                         {"type","copy_file_done"},
                         {"drive",m_drive},
                         {"file",srcPath},
+                        {"local_path",dstPath},
+                        {"rel_path",relPath},
+                        {"file_size",fileSize},
                         {"file_index",i+1},
                         {"file_total",tasks.size()}
                     });

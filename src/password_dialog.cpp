@@ -137,7 +137,7 @@ void PasswordDialog::onForgotPassword() {
         QPushButton:hover { background: #616161; }
     )");
 
-    QPushButton* okBtn = warnBox.button(QMessageBox::Ok);
+    QAbstractButton* okBtn = warnBox.button(QMessageBox::Ok);
     okBtn->setText("确认清空");
     okBtn->setStyleSheet("QPushButton { background: #b71c1c; color: white; border: none; border-radius: 4px; padding: 6px 16px; font-weight: bold; }");
 

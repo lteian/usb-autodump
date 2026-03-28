@@ -30,6 +30,7 @@ public:
     QList<FileRecord> recordsForDrive(const QString& drive);
     QPair<int, qint64> pendingCountAndSize();
     QPair<int, qint64> uploadedCountAndSize();
+    bool hasPendingUpload(const QString& localPath);
     void clearAll();
 
 private:

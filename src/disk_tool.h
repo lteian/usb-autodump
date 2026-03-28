@@ -11,6 +11,9 @@ public:
 
     // Safely eject/unmount a drive
     static bool ejectDrive(const QString& drive);
+
+    // Get free/total space for a path (extracts drive letter on Windows)
+    static bool getDiskSpace(const QString& path, qint64& freeBytes, qint64& totalBytes);
 };
 
 #endif // DISK_TOOL_H

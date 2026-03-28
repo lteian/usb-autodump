@@ -33,7 +33,6 @@ public:
 private:
     Config() = default;
     QString configFilePath() const;
-    QString dataDirPath() const;
 
     QJsonObject m_data;
 };
