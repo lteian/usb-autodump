@@ -1,0 +1,54 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Qt5 (MinGW)
+        run: |
+          pip install aqtinstall
+          aqt install-qt windows win64_mingw81_64 5.15.2 -O C:\Qt
+
+      - name: Set Qt path
+        run: Add-Content $env:GITHUB_PATH "C:\Qt\5.15.2\win64_mingw81_64\bin"
+
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cmake -G "MinGW Makefiles" -B build -S . -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Deploy Qt DLLs
+        run: |
+          C:\Qt\5.15.2\win64_mingw81_64\bin\windeployqt.exe --no-translations build/usb-autodump.exe
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist/${{ github.ref_name }}
+          cp build/usb-autodump.exe dist/${{ github.ref_name }}/
+          cp -r build/*.dll dist/${{ github.ref_name }}/ 2>/dev/null || true
+          cp -r C:/Qt/5.15.2/win64_mingw81_64/bin/*.dll dist/${{ github.ref_name }}/ 2>/dev/null || true
+          ls -la dist/${{ github.ref_name }}/
+
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: dist/${{ github.ref_name }}/*
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
