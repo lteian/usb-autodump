@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QStandardPaths>
 #include <QRegExp>
+#include <QRegularExpression>
 #include <QGroupBox>
 #include <QTcpSocket>
 #include <QTimer>
@@ -328,7 +329,7 @@ void SettingsDialog::onSave() {
     } else {
         ftp["password"] = cfg.ftpConfig().value("password");
     }
-    ftp["sub_path"] = m_ftpSubPath->text().trimmed().replace(QRegExp("/+$"), "");
+    ftp["sub_path"] = m_ftpSubPath->text().trimmed().replace(QRegularExpression("/+$"), "");
     ftp["use_tls"] = m_ftpTls->isChecked();
     ftp["max_retry"] = m_retrySpin->value();
 
@@ -428,9 +429,6 @@ void SettingsDialog::onTestFTP() {
         }
     }
     if (userResp.isEmpty()) userResp = resp;
-
-    qDebug() << "USER response raw:" << resp;
-    qDebug() << "USER response extracted:" << userResp;
 
     if (!userResp.startsWith("331")) {
         QMessageBox::critical(this, "FTP测试",

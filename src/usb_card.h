@@ -33,11 +33,11 @@ signals:
 
 private:
     QString m_drive;
+    QFrame* m_statusBar = nullptr;
     QLabel* m_driveLabel = nullptr;
     QLabel* m_statusLabel = nullptr;
-    QLabel* m_hintLabel = nullptr;       // shown when idle
+    QLabel* m_hintLabel = nullptr;
     QLabel* m_sizeLabel = nullptr;
-    QProgressBar* m_freeSpaceBar = nullptr; // disk usage bar
     QProgressBar* m_overallProgress = nullptr;
     QLabel* m_speedLabel = nullptr;
     QLabel* m_etaLabel = nullptr;

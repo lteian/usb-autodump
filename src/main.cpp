@@ -18,6 +18,35 @@
 #include <QVariant>
 #include <QSharedMemory>
 #include <QLocalServer>
+#include <QDate>
+
+// Max log file size: 5MB
+static const qint64 MAX_LOG_SIZE = 5 * 1024 * 1024;
+
+// Get daily log file path: {appDir}/logs/{yyyy-MM-dd}.log
+static QString getDailyLogPath() {
+    QString appDir = QCoreApplication::applicationDirPath();
+    QString logDir = appDir + "/logs";
+    QDir().mkpath(logDir);
+    QString dateStr = QDate::currentDate().toString("yyyy-MM-dd");
+    return logDir + "/" + dateStr + ".log";
+}
+
+// Write important message to daily log file (truncates if > 5MB)
+static void writeImportantLog(const QString& msg) {
+    QString path = getDailyLogPath();
+    QFile f(path);
+    // Truncate if file exceeds max size
+    if (f.size() > MAX_LOG_SIZE) {
+        f.open(QIODevice::WriteOnly | QIODevice::Text);
+        f.write(QString("==== Log truncated (size limit exceeded) ====\n").toUtf8());
+        f.close();
+    }
+    if (f.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream ts(&f);
+        ts << QDateTime::currentDateTime().toString("hh:mm:ss") << " " << msg << "\n";
+    }
+}
 #include <QLocalSocket>
 #include <cstdio>
 #include <cstdlib>
@@ -58,6 +87,12 @@ int main(int argc, char *argv[]) {
     QApplication a(argc, argv);
     a.setApplicationName("USB自动转储工具");
     a.setOrganizationName("usb-autodump");
+
+    // Install message handler to write debug output to daily log file
+    writeImportantLog("==== Application started ====");
+    qInstallMessageHandler([](QtMsgType, const QMessageLogContext &, const QString &msg) {
+        writeImportantLog(msg);
+    });
 
     // Check for subprocess modes FIRST
     bool dumpMode = false;

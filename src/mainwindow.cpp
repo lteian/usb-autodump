@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "disk_space_widget.h"
 #include "usb_card.h"
 #include "log_panel.h"
 #include "settings_dialog.h"
@@ -35,7 +36,7 @@ MainWindow::MainWindow(QWidget* parent)
 {
     setWindowTitle("U盘自动转储工具");
     setMinimumSize(960, 680);
-    setStyleSheet("QMainWindow { background: #F5F7FA; }");
+    setStyleSheet("QMainWindow { background: #F1F5F9; }");
 
     QWidget* central = new QWidget();
     setCentralWidget(central);
@@ -47,163 +48,195 @@ MainWindow::MainWindow(QWidget* parent)
     connect(aboutAction, &QAction::triggered, this, &MainWindow::onAbout);
 
     QVBoxLayout* vl = new QVBoxLayout(central);
-    vl->setSpacing(12);
+    vl->setSpacing(10);
     vl->setContentsMargins(20, 20, 20, 10);
 
-    // ── Header Card ────────────────────────────────────────
+    // ── Header (Compact single row) ──────────────────────
     QFrame* headerCard = new QFrame();
     headerCard->setObjectName("headerCard");
     headerCard->setStyleSheet(R"(
         QFrame#headerCard {
             background: #FFFFFF;
-            border-radius: 12px;
-            padding: 16px;
+            border-radius: 10px;
+            padding: 10px 16px;
         }
     )");
-    QVBoxLayout* headerVl = new QVBoxLayout(headerCard);
-    headerVl->setSpacing(10);
-    headerVl->setContentsMargins(0, 0, 0, 0);
+    QHBoxLayout* headerHl = new QHBoxLayout(headerCard);
+    headerHl->setContentsMargins(0, 0, 0, 0);
+    headerHl->setSpacing(16);
 
-    // Row 1: Title + status + buttons
-    QHBoxLayout* row1 = new QHBoxLayout();
     QLabel* titleLabel = new QLabel("U盘自动转储工具");
-    titleLabel->setStyleSheet("color: #1F2329; font-size: 18px; font-weight: 700; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
-    row1->addWidget(titleLabel);
-    row1->addSpacing(16);
-    m_dumpStatusLabel = new QLabel("转储: 0个进行中");
-    m_dumpStatusLabel->setStyleSheet("color: #86909C; font-size: 13px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
-    row1->addWidget(m_dumpStatusLabel);
-    row1->addSpacing(8);
-    QLabel* dot = new QLabel("·");
-    dot->setStyleSheet("color: #86909C; font-size: 13px;");
-    row1->addWidget(dot);
-    row1->addSpacing(8);
-    m_ftpStatusLabel = new QLabel("FTP: 未连接");
-    m_ftpStatusLabel->setStyleSheet("color: #86909C; font-size: 13px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
-    row1->addWidget(m_ftpStatusLabel);
-    row1->addStretch();
+    titleLabel->setStyleSheet("color: #1F2329; font-size: 15px; font-weight: 700; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    headerHl->addWidget(titleLabel);
 
-    // Settings button - white with gray stroke
+    m_dumpStatusLabel = new QLabel("转储: 0个进行中");
+    m_dumpStatusLabel->setStyleSheet("color: #86909C; font-size: 12px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    headerHl->addWidget(m_dumpStatusLabel);
+
+    m_ftpStatusLabel = new QLabel("FTP: 未连接");
+    m_ftpStatusLabel->setStyleSheet("color: #86909C; font-size: 12px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    headerHl->addWidget(m_ftpStatusLabel);
+    headerHl->addStretch();
+
     QPushButton* settingsBtn = new QPushButton("设置");
     settingsBtn->setStyleSheet(R"(
         QPushButton {
             background: #FFFFFF;
-            color: #4E5969;
-            border: 1px solid #D4DAE4;
-            border-radius: 6px;
+            color: #475569;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
             padding: 6px 14px;
-            font-size: 13px;
+            font-size: 12px;
             font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
         }
-        QPushButton:hover { background: #F3F4F6; }
+        QPushButton:hover { background: #F1F5F9; border-color: #3B82F6; }
     )");
     connect(settingsBtn, &QPushButton::clicked, this, &MainWindow::onSettingsClicked);
-    row1->addWidget(settingsBtn);
+    headerHl->addWidget(settingsBtn);
 
-    // Scan button - blue filled
     QPushButton* scanLocalBtn = new QPushButton("扫描");
     scanLocalBtn->setStyleSheet(R"(
         QPushButton {
-            background: #165DFF;
+            background: #3B82F6;
             color: white;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             padding: 6px 14px;
-            font-size: 13px;
+            font-size: 12px;
             font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
             font-weight: 500;
         }
-        QPushButton:hover { background: #1050E0; }
+        QPushButton:hover { background: #2563EB; }
     )");
     connect(scanLocalBtn, &QPushButton::clicked, this, &MainWindow::onScanLocalDirectory);
-    row1->addWidget(scanLocalBtn);
-    headerVl->addLayout(row1);
+    headerHl->addWidget(scanLocalBtn);
     vl->addWidget(headerCard);
 
-    // ── USB Cards Area ────────────────────────────────────
-    // 6 cards in one row, evenly distributed
-    QHBoxLayout* cardsLayout = new QHBoxLayout();
-    cardsLayout->setSpacing(10);
+    // ── Main Content: Two Columns ────────────────────────
+    QHBoxLayout* mainHl = new QHBoxLayout();
+    mainHl->setSpacing(10);
+    mainHl->setStretchFactor(mainHl, 1);
 
-    m_cards.reserve(8);
-    for (int i = 0; i < 6; ++i) {
+    // Left Column: USB Cards
+    QFrame* leftCard = new QFrame();
+    leftCard->setObjectName("leftCard");
+    leftCard->setStyleSheet(R"(
+        QFrame#leftCard {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 12px;
+        }
+    )");
+    QVBoxLayout* leftVl = new QVBoxLayout(leftCard);
+    leftVl->setSpacing(6);
+    leftVl->setContentsMargins(0, 0, 0, 0);
+
+    QLabel* leftTitle = new QLabel("USB 设备");
+    leftTitle->setStyleSheet("color: #1F2329; font-size: 13px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    leftVl->addWidget(leftTitle);
+
+    m_cards.reserve(4);
+    for (int i = 0; i < 4; ++i) {
         USBCard* card = new USBCard();
-        card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         m_cards.append(card);
-        cardsLayout->addWidget(card);
+        leftVl->addWidget(card, 1);  // stretch 1 = equal 25% each
         connect(card, &USBCard::formatClicked, this, &MainWindow::onFormatClicked);
         connect(card, &USBCard::ejectClicked, this, &MainWindow::onEjectClicked);
         connect(card, &USBCard::cancelDumpClicked, this, &MainWindow::onCancelDumpClicked);
     }
-    vl->addLayout(cardsLayout);
+    leftVl->addWidget(leftCard, 3);  // 30%
+    mainHl->addWidget(leftCard, 3);  // 30%
 
-    // ── Upload Queue ──────────────────────────────────────
-    QFrame* queueCard = new QFrame();
-    queueCard->setObjectName("queueCard");
-    queueCard->setStyleSheet(R"(
-        QFrame#queueCard {
+    // Middle Column: Pie Chart (80%) + Log (20%)
+    QFrame* middleCard = new QFrame();
+    middleCard->setObjectName("middleCard");
+    middleCard->setStyleSheet(R"(
+        QFrame#middleCard {
             background: #FFFFFF;
             border-radius: 12px;
-            padding: 14px 16px;
+            padding: 12px;
         }
     )");
-    QVBoxLayout* queueVl = new QVBoxLayout(queueCard);
-    queueVl->setSpacing(8);
-    queueVl->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout* middleVl = new QVBoxLayout(middleCard);
+    middleVl->setSpacing(8);
+    middleVl->setContentsMargins(0, 0, 0, 0);
+
+    // Top 80%: Disk Space Pie Chart
+    QLabel* diskTitle = new QLabel("本地存储空间");
+    diskTitle->setStyleSheet("color: #1F2329; font-size: 13px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    middleVl->addWidget(diskTitle);
+
+    m_diskSpaceWidget = new DiskSpaceWidget();
+    m_diskSpaceWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_diskSpaceWidget->setMinimumSize(100, 100);
+    middleVl->addWidget(m_diskSpaceWidget, 4);  // stretch 4 = 80%
+
+    m_diskSpaceLabel = new QLabel("磁盘: C:\\");
+    m_diskSpaceLabel->setStyleSheet("color: #86909C; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    middleVl->addWidget(m_diskSpaceLabel);
+
+    m_diskSpaceDetailLabel = new QLabel("共 0GB | 可用 0GB");
+    m_diskSpaceDetailLabel->setStyleSheet("color: #4E5969; font-size: 12px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: transparent;");
+    middleVl->addWidget(m_diskSpaceDetailLabel);
+
+    // Bottom 20%: Log Panel
+    QLabel* logTitle = new QLabel("运行日志");
+    logTitle->setStyleSheet("color: #1F2329; font-size: 13px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    middleVl->addWidget(logTitle);
+
+    m_logPanel = new LogPanel();
+    m_logPanel->setMinimumHeight(60);
+    middleVl->addWidget(m_logPanel, 1);  // stretch 1 = 20%
+    mainHl->addWidget(middleCard, 4);  // 40%
+
+    // Right Column: Upload Queue (30%)
+    QFrame* rightCard = new QFrame();
+    rightCard->setObjectName("rightCard");
+    rightCard->setStyleSheet(R"(
+        QFrame#rightCard {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 12px;
+        }
+    )");
+    QVBoxLayout* rightVl = new QVBoxLayout(rightCard);
+    rightVl->setSpacing(8);
+    rightVl->setContentsMargins(0, 0, 0, 0);
+
+    QLabel* queueTitle = new QLabel("待上传队列");
+    queueTitle->setStyleSheet("color: #1F2329; font-size: 13px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    rightVl->addWidget(queueTitle);
 
     QHBoxLayout* queueHeader = new QHBoxLayout();
-    m_queueCountLabel = new QLabel("待上传 (0个文件夹 · 0个待上传)");
-    m_queueCountLabel->setStyleSheet("color: #1F2329; font-size: 14px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    queueHeader->setContentsMargins(0, 0, 0, 0);
+    m_queueCountLabel = new QLabel("0个文件夹 · 0个待上传");
+    m_queueCountLabel->setStyleSheet("color: #86909C; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     queueHeader->addWidget(m_queueCountLabel);
     queueHeader->addStretch();
+
     QPushButton* clearBtn = new QPushButton("清空已完成");
     clearBtn->setStyleSheet(R"(
         QPushButton {
             background: transparent;
-            color: #86909C;
-            border: 1px solid #E5E7EB;
-            border-radius: 4px;
+            color: #64748B;
+            border: 1px solid #E2E8F0;
+            border-radius: 6px;
             padding: 3px 10px;
-            font-size: 12px;
+            font-size: 11px;
             font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
         }
-        QPushButton:hover { color: #4E5969; background: #F9FAFB; }
+        QPushButton:hover { color: #3B82F6; background: #F1F5F9; border-color: #3B82F6; }
     )");
     connect(clearBtn, &QPushButton::clicked, m_uploadQueue, &UploadQueue::clearCompleted);
     queueHeader->addWidget(clearBtn);
-    queueVl->addLayout(queueHeader);
-
-    // Divider line
-    QFrame* divider = new QFrame();
-    divider->setStyleSheet("background: #E5E6EB; max-height: 1px;");
-    divider->setMaximumHeight(1);
-    queueVl->addWidget(divider);
+    rightVl->addLayout(queueHeader);
 
     m_uploadQueue = new UploadQueue();
-    queueVl->addWidget(m_uploadQueue);
-    vl->addWidget(queueCard);
+    rightVl->addWidget(m_uploadQueue, 1);
+    mainHl->addWidget(rightCard, 3);  // 30%
 
-    // ── Log Panel ─────────────────────────────────────────
-    QFrame* logCard = new QFrame();
-    logCard->setObjectName("logCard");
-    logCard->setStyleSheet(R"(
-        QFrame#logCard {
-            background: #FFFFFF;
-            border-radius: 12px;
-            padding: 14px 16px;
-        }
-    )");
-    QVBoxLayout* logVl = new QVBoxLayout(logCard);
-    logVl->setSpacing(8);
-    logVl->setContentsMargins(0, 0, 0, 0);
-
-    QLabel* logTitle = new QLabel("运行日志");
-    logTitle->setStyleSheet("color: #1F2329; font-size: 14px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
-    logVl->addWidget(logTitle);
-
-    m_logPanel = new LogPanel();
-    logVl->addWidget(m_logPanel);
-    vl->addWidget(logCard, 0);
+    vl->addLayout(mainHl, 1);
 
     // ── Status Bar ────────────────────────────────────────
     QStatusBar* sb = new QStatusBar();
@@ -243,6 +276,12 @@ MainWindow::MainWindow(QWidget* parent)
     resumePendingUploads();
     updateQueueCount();
 
+    // Disk space update timer
+    QTimer* diskTimer = new QTimer(this);
+    connect(diskTimer, &QTimer::timeout, this, &MainWindow::updateDiskSpace);
+    diskTimer->start(5000);
+    updateDiskSpace();
+
     m_logPanel->appendInfo("服务已启动，等待 USB 设备...");
 }
 
@@ -258,16 +297,20 @@ MainWindow::~MainWindow() {
 void MainWindow::onDeviceInserted(const USBDevice& dev) {
     QString drive = dev.driveLetter;
     double usedPct = dev.totalSize > 0 ? (dev.usedSize() * 100.0 / dev.totalSize) : 0;
-    m_logPanel->appendInfo(QString("%1 插入 | 容量 %2GB | 已用 %3% | 剩余 %4")
+    QString info = QString("%1 插入 | 容量 %2GB | 已用 %3% | 剩余 %4")
         .arg(drive)
         .arg(dev.totalSize / 1024.0 / 1024 / 1024, 0, 'f', 1)
         .arg(int(usedPct))
-        .arg(formatSize(dev.freeSpace)));
+        .arg(formatSize(dev.freeSpace));
+    m_logPanel->appendInfo(info);
+    qInfo() << info;
     allocateCard(drive, dev);
 }
 
 void MainWindow::onDeviceRemoved(const QString& drive) {
-    m_logPanel->appendInfo(drive + " 已移除");
+    QString info = drive + " 已移除";
+    m_logPanel->appendInfo(info);
+    qInfo() << info;
     releaseCard(drive);
 }
 
@@ -349,7 +392,9 @@ void MainWindow::onDumpCopyFileDone(const QString& drive, const QString& file,
                                     qint64 fileSize,
                                     int fileIndex, int fileTotal) {
     USBCard* card = m_driveToCard.value(drive, nullptr);
-    if (!card) return;
+    if (!card) {
+        return;
+    }
     QString fname = file;
     int p = fname.lastIndexOf('/');
     if (p < 0) p = fname.lastIndexOf('\\');
@@ -427,7 +472,6 @@ void MainWindow::onFTPUploadProgress(int recordId, qint64 uploadedBytes, qint64)
 void MainWindow::onFTPUploadDone(int recordId) {
     m_uploadQueue->updateFileStatus(recordId, "uploaded");
     FileRecordDB::instance().updateStatus(recordId, "uploaded");
-    m_logPanel->appendInfo("上传成功 [record=" + QString::number(recordId) + "]");
     updateStatusBar();
     updateQueueCount();
 }
@@ -435,7 +479,9 @@ void MainWindow::onFTPUploadDone(int recordId) {
 void MainWindow::onFTPFileDeleted(int recordId, const QString& localPath) {
     m_uploadQueue->updateFileStatus(recordId, "deleted");
     FileRecordDB::instance().updateStatus(recordId, "deleted");
-    m_logPanel->appendInfo("本地文件已删除：" + QFileInfo(localPath).fileName());
+    QString info = "上传成功：" + QFileInfo(localPath).fileName();
+    m_logPanel->appendInfo(info);
+    qInfo() << info;
     updateStatusBar();
     updateQueueCount();
 }
@@ -443,7 +489,9 @@ void MainWindow::onFTPFileDeleted(int recordId, const QString& localPath) {
 void MainWindow::onFTPUploadError(int recordId, const QString& msg) {
     m_uploadQueue->updateFileStatus(recordId, "error");
     FileRecordDB::instance().updateStatus(recordId, "error", msg);
-    m_logPanel->appendError("上传失败 [record=" + QString::number(recordId) + "]: " + msg);
+    QString err = "上传失败 [record=" + QString::number(recordId) + "]: " + msg;
+    m_logPanel->appendError(err);
+    qWarning() << err;
     updateStatusBar();
     updateQueueCount();
 }
@@ -583,6 +631,32 @@ void MainWindow::updateStatusBar() {
             .arg(uploaded.first).arg(formatSize(uploaded.second))
             .arg(m_ftpConnected ? "已连接" : "未连接")
     );
+}
+
+void MainWindow::updateDiskSpace() {
+    Config& cfg = Config::instance();
+    cfg.load();
+    QString path = cfg.localPath();
+    if (path.isEmpty()) path = "C:/";
+
+    if (m_diskSpaceWidget) {
+        m_diskSpaceWidget->updateFromPath(path);
+    }
+
+    if (m_diskSpaceLabel) {
+        QString driveLetter = path.length() >= 2 && path[1] == ':' ? path.left(2) : "C:";
+        m_diskSpaceLabel->setText("磁盘: " + driveLetter);
+    }
+
+    if (m_diskSpaceDetailLabel) {
+        qint64 free = 0, total = 0;
+        if (DiskTool::getDiskSpace(path, free, total)) {
+            m_diskSpaceDetailLabel->setText(QString("共 %1 | 可用 %2")
+                .arg(formatSize(total)).arg(formatSize(free)));
+        } else {
+            m_diskSpaceDetailLabel->setText("共 0 | 可用 0");
+        }
+    }
 }
 
 void MainWindow::resumePendingUploads() {

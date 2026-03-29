@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "gifenc": "^1.0.3",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
+    "svg2png-wasm": "^1.4.1"
+  }
+}

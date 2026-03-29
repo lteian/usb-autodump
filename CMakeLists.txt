@@ -33,6 +33,7 @@ add_executable(usb-autodump WIN32
     src/dump_process.cpp
     src/ftp_process.cpp
     src/disk_ring.cpp
+    src/disk_space_widget.cpp
     src/win32_icon.rc
 )
 

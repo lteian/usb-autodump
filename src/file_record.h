@@ -35,6 +35,7 @@ public:
 
 private:
     FileRecordDB();
+    ~FileRecordDB();
     void ensureTable();
     QString dbPath();
 

@@ -7,7 +7,8 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QTimer>
-#include <QDebug>
+#include <QCoreApplication>
+#include <QRegularExpression>
 
 FTPProcess::FTPProcess(QObject* parent)
     : QObject(parent)
@@ -63,6 +64,11 @@ void FTPProcess::connectToHost() {
     }
     m_user = user;
     m_pass = pass;
+    if (host.isEmpty()) {
+        emit uploadError(0, "FTP未配置服务器地址");
+        cleanupAndNext();
+        return;
+    }
 
     if (m_cmdSocket) {
         m_cmdSocket->deleteLater();
@@ -93,7 +99,6 @@ void FTPProcess::onCmdReadyRead() {
     QStringList lines = response.split("\r\n", Qt::SkipEmptyParts);
     for (QString& line : lines) {
         if (line.isEmpty()) continue;
-        emit logMessage("[FTP] << " + line);
         handleResponse(line);
     }
 }
@@ -120,9 +125,10 @@ void FTPProcess::handleResponse(const QString& line) {
             if (code == 227) {
                 // Parse PASV response: (h1,h2,h3,h4,p1,p2)
                 int p1 = -1, p2 = -1;
-                QRegExp rx("\\(([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\\)");
-                if (rx.indexIn(msg) >= 0) {
-                    QStringList caps = rx.capturedTexts();
+                QRegularExpression rx("\\((\\d+),(\\d+),(\\d+),(\\d+),(\\d+),(\\d+)\\)");
+                QRegularExpressionMatch match = rx.match(msg);
+                if (match.hasMatch()) {
+                    QStringList caps = match.capturedTexts();
                     m_dataHost = caps[1] + "." + caps[2] + "." + caps[3] + "." + caps[4];
                     p1 = caps[5].toInt();
                     p2 = caps[6].toInt();
@@ -158,6 +164,30 @@ void FTPProcess::handleResponse(const QString& line) {
             }
             break;
 
+        case WaitingMKD:
+            // 257=created, 550=already exists or error (both OK for our purpose)
+            if (code == 257 || code == 550) {
+                m_mkdirIndex++;
+                if (m_mkdirIndex < m_mkdirQueue.size()) {
+                    // Send next MKD
+                    sendMkdirSync(m_mkdirQueue[m_mkdirIndex]);
+                } else {
+                    // All directories created, proceed to PASV
+                    m_mkdirQueue.clear();
+                    enterPassiveModeStep2();
+                }
+            } else {
+                // Unexpected response, try to continue anyway
+                m_mkdirIndex++;
+                if (m_mkdirIndex < m_mkdirQueue.size()) {
+                    sendMkdirSync(m_mkdirQueue[m_mkdirIndex]);
+                } else {
+                    m_mkdirQueue.clear();
+                    enterPassiveModeStep2();
+                }
+            }
+            break;
+
         default:
             break;
     }
@@ -185,19 +215,25 @@ void FTPProcess::ensureRemoteDir(const QString& remotePath) {
     }
 
     // Build paths incrementally: /movie, /movie/Videos, ...
+    m_mkdirQueue.clear();
     QString currentPath;
     for (int i = 0; i < parts.size() - 1; i++) {
         currentPath += "/" + parts[i];
-        sendMkdirSync(currentPath);
+        m_mkdirQueue.append(currentPath);
     }
 
-    // After all MKD commands, proceed to PASV
-    enterPassiveModeStep2();
+    // Send first MKD command
+    m_mkdirIndex = 0;
+    if (!m_mkdirQueue.isEmpty()) {
+        m_state = WaitingMKD;
+        sendMkdirSync(m_mkdirQueue[m_mkdirIndex]);
+    } else {
+        enterPassiveModeStep2();
+    }
 }
 
 void FTPProcess::sendMkdirSync(const QString& path) {
     if (!m_cmdSocket || m_cmdSocket->state() != QAbstractSocket::ConnectedState) return;
-    // Fire and forget - 257=created, 550=already exists, both fine
     m_cmdSocket->write(QString("MKD " + path + "\r\n").toUtf8());
 }
 
@@ -243,16 +279,23 @@ void FTPProcess::onDataConnected() {
 
 void FTPProcess::sendFileData() {
     const qint64 CHUNK = 65536;
+    m_bytesWritten = 0;
     while (!m_file.atEnd()) {
         QByteArray chunk = m_file.read(CHUNK);
         if (chunk.isEmpty()) break;
-        m_dataSocket->write(chunk);
-        m_bytesWritten += chunk.size();
+        qint64 written = m_dataSocket->write(chunk);
+        if (written > 0) {
+            m_bytesWritten += written;
+        }
         qint64 total = m_currentTask->fileSize > 0 ? m_currentTask->fileSize : m_bytesWritten;
         emit uploadProgress(m_currentTask->recordId, m_bytesWritten, total);
+        // Process events to avoid blocking UI, but write immediately
+        QCoreApplication::processEvents();
     }
     m_file.close();
     m_dataSocket->disconnectFromHost();
+    // Note: onDataDisconnected will be called asynchronously
+    // The 226 response will be handled by onCmdReadyRead
 }
 
 void FTPProcess::onDataBytesWritten(qint64 bytes) {
@@ -260,9 +303,12 @@ void FTPProcess::onDataBytesWritten(qint64 bytes) {
 }
 
 void FTPProcess::onDataDisconnected() {
-    // Check final response from server
-    QString resp = QString::fromUtf8(m_cmdSocket->readAll());
-    finishUpload();
+    // Just clean up the data socket - don't read m_cmdSocket here!
+    // The 226 response will arrive via onCmdReadyRead
+    if (m_dataSocket) {
+        m_dataSocket->deleteLater();
+        m_dataSocket = nullptr;
+    }
 }
 
 void FTPProcess::finishUpload() {

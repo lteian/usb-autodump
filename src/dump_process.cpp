@@ -170,7 +170,7 @@ void DumpSubProcess::scanAndCopy() {
                 if (m_videoExts.contains(ext)) {
                     QString srcPath = fi.absoluteFilePath();
                     QString relPath = QDir(m_drive).relativeFilePath(srcPath);
-                    QString dstPath = QDir(m_localBase + "/" + m_drive).absoluteFilePath(relPath);
+                    QString dstPath = QDir(m_localBase + "/" + m_drive.left(1)).absoluteFilePath(relPath);
                     m_tasks.append(qMakePair(srcPath, dstPath));
                     m_totalSize += fi.size();
                     m_totalFiles++;
@@ -347,5 +347,3 @@ int dumpSubProcessMain(int argc, char* argv[]) {
 }
 
 #endif // SUBPROCESS_MODE
-
-#include "dump_process.moc"

@@ -4,6 +4,7 @@
 #include <QString>
 #include <QJsonObject>
 #include <QMap>
+#include <QMutex>
 
 class Config {
 public:
@@ -35,6 +36,7 @@ private:
     QString configFilePath() const;
 
     QJsonObject m_data;
+    mutable QMutex m_mutex{QMutex::Recursive};
 };
 
 #endif // CONFIG_H

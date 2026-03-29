@@ -23,13 +23,13 @@ UploadQueue::UploadQueue(QWidget* parent)
     m_tree->setStyleSheet(R"(
         QTreeWidget {
             background: transparent;
-            color: #1F2329;
+            color: #1E293B;
             border: none;
             font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-            font-size: 13px;
+            font-size: 12px;
         }
         QTreeWidget::item {
-            padding: 3px 0;
+            padding: 2px 0;
         }
         QTreeWidget::item:selected {
             background: transparent;
@@ -39,11 +39,11 @@ UploadQueue::UploadQueue(QWidget* parent)
         }
         QHeaderView::section {
             background: transparent;
-            color: #86909C;
+            color: #94A3B8;
             border: none;
-            border-bottom: 1px solid #E5E6EB;
-            padding: 4px 0;
-            font-size: 12px;
+            border-bottom: 1px solid #E2E8F0;
+            padding: 3px 0;
+            font-size: 11px;
             font-weight: normal;
         }
     )");
@@ -78,7 +78,7 @@ void UploadQueue::addFolder(const QString& folderPath, const QList<UploadFileIte
         fileItem->setText(0, fname);
         fileItem->setText(1, formatSize(file.fileSize));
         fileItem->setText(2, "⚪ 待上传");
-        fileItem->setForeground(2, QColor("#86909C"));
+        fileItem->setForeground(2, QColor("#94A3B8"));
         fileItem->setCheckState(0, Qt::Checked);
         fileItem->setData(0, Qt::UserRole, file.recordId);
 
@@ -117,7 +117,7 @@ void UploadQueue::addFile(int recordId, const QString& drive,
     fileItem->setText(0, fname);
     fileItem->setText(1, formatSize(fileSize));
     fileItem->setText(2, "⚪ 待上传");
-    fileItem->setForeground(2, QColor("#86909C"));
+    fileItem->setForeground(2, QColor("#94A3B8"));
     fileItem->setCheckState(0, Qt::Checked);
     fileItem->setData(0, Qt::UserRole, recordId);
 
@@ -135,6 +135,30 @@ void UploadQueue::updateFileStatus(int recordId, const QString& status, qint64 u
     UploadFileItem* item = m_fileMap.value(recordId, nullptr);
     if (!item) return;
 
+    QString fp = QFileInfo(item->localPath).absolutePath();
+    UploadFolderItem* folder = m_folderMap.value(fp, nullptr);
+
+    // If done/deleted/error, remove immediately from queue
+    if (status == "uploaded" || status == "deleted" || status == "error") {
+        // Remove from folder's file list
+        if (folder) {
+            folder->files.removeAll(item);
+        }
+        // Remove from map and delete
+        m_fileMap.remove(recordId);
+        delete item->treeItem;
+        delete item;
+
+        // If folder is empty, remove it too
+        if (folder && folder->files.isEmpty()) {
+            delete folder->treeItem;
+            delete folder;
+            m_folderMap.remove(fp);
+        }
+        return;
+    }
+
+    // Otherwise update the status display
     item->status = status;
     QTreeWidgetItem* treeItem = item->treeItem;
 
@@ -145,52 +169,27 @@ void UploadQueue::updateFileStatus(int recordId, const QString& status, qint64 u
         } else {
             treeItem->setText(2, "🟡 上传中");
         }
-        treeItem->setForeground(2, QColor("#FF7D00"));
-    } else if (status == "uploaded") {
-        treeItem->setText(2, "✅ 已上传");
-        treeItem->setForeground(2, QColor("#00B42A"));
-        treeItem->setCheckState(0, Qt::Unchecked);
-    } else if (status == "deleted") {
-        treeItem->setText(2, "✅ 已删除");
-        treeItem->setForeground(2, QColor("#00B42A"));
-        treeItem->setCheckState(0, Qt::Unchecked);
-    } else if (status == "error") {
-        treeItem->setText(2, "❌ 失败");
-        treeItem->setForeground(2, QColor("#F53F3F"));
+        treeItem->setForeground(2, QColor("#F59E0B"));
     } else if (status == "pending") {
         treeItem->setText(2, "⚪ 待上传");
-        treeItem->setForeground(2, QColor("#86909C"));
-    }
-
-    QString fp = QFileInfo(item->localPath).absolutePath();
-    UploadFolderItem* folder = m_folderMap.value(fp, nullptr);
-    if (folder) {
-        bool allDone = true;
-        for (UploadFileItem* f : folder->files) {
-            if (f->status != "uploaded" && f->status != "deleted") {
-                allDone = false;
-                break;
-            }
-        }
-        if (allDone && !folder->completed) {
-            folder->completed = true;
-            folder->treeItem->setText(0, QFileInfo(folder->folderPath).fileName() + " ✓");
-            folder->treeItem->setForeground(0, QColor("#00B42A"));
-            folder->treeItem->setExpanded(false);
-        }
+        treeItem->setForeground(2, QColor("#94A3B8"));
     }
 }
 
 void UploadQueue::clearCompleted() {
     QList<int> toRemove;
     for (auto it = m_fileMap.begin(); it != m_fileMap.end(); ++it) {
-        if (it.value()->status == "uploaded" || it.value()->status == "deleted") {
+        if (it.value()->status == "uploaded" || it.value()->status == "deleted" || it.value()->status == "error") {
             toRemove.append(it.key());
         }
     }
     for (int id : toRemove) {
         UploadFileItem* item = m_fileMap.take(id);
         if (item) {
+            // Remove from folder's file list to avoid dangling pointer
+            for (auto fit = m_folderMap.begin(); fit != m_folderMap.end(); ++fit) {
+                fit.value()->files.removeAll(item);
+            }
             delete item->treeItem;
             delete item;
         }

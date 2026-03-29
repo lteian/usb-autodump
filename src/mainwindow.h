@@ -17,6 +17,7 @@ class DumpProcess;
 class FTPProcess;
 class SettingsDialog;
 class USBDevice;
+class DiskSpaceWidget;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -62,6 +63,7 @@ private:
     void releaseCard(const QString& drive);
     void startDumpProcess(const QString& drive);
     void updateDumpStatusLabel();
+    void updateDiskSpace();
     QString formatSize(qint64 b) const;
 
     QList<USBCard*> m_cards;
@@ -73,6 +75,9 @@ private:
 
     LogPanel* m_logPanel = nullptr;
     UploadQueue* m_uploadQueue = nullptr;
+    DiskSpaceWidget* m_diskSpaceWidget = nullptr;
+    QLabel* m_diskSpaceLabel = nullptr;
+    QLabel* m_diskSpaceDetailLabel = nullptr;
     QLabel* m_ftpStatusLabel = nullptr;
     QLabel* m_dumpStatusLabel = nullptr;
     QLabel* m_queueCountLabel = nullptr;

@@ -9,58 +9,67 @@ USBCard::USBCard(QWidget* parent)
     : QFrame(parent)
 {
     setFrameStyle(QFrame::NoFrame);
-    setMinimumWidth(100);
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setStyleSheet(R"(
         QFrame {
-            background: #F9FAFB;
-            border: 1px solid #E5E6EB;
-            border-radius: 8px;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+        }
+        QFrame:hover {
+            border-color: #3B82F6;
+            background: #F8FAFC;
         }
     )");
 
+    // Status indicator bar on the left
+    m_statusBar = new QFrame(this);
+    m_statusBar->setFixedWidth(4);
+    m_statusBar->setStyleSheet("background: #E2E8F0; border: none; border-radius: 2px;");
+    m_statusBar->move(0, 0);
+
     QVBoxLayout* vl = new QVBoxLayout(this);
-    vl->setSpacing(4);
-    vl->setContentsMargins(10, 8, 10, 8);
+    vl->setSpacing(6);
+    vl->setContentsMargins(16, 10, 10, 10);
 
     // Drive + status row
     QHBoxLayout* topRow = new QHBoxLayout();
     topRow->setSpacing(4);
     m_driveLabel = new QLabel("空闲");
-    m_driveLabel->setStyleSheet("color: #86909C; font-size: 13px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    m_driveLabel->setStyleSheet("color: #1E293B; font-size: 14px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     m_statusLabel = new QLabel("");
-    m_statusLabel->setStyleSheet("color: #86909C; font-size: 10px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    m_statusLabel->setStyleSheet("color: #64748B; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     topRow->addWidget(m_driveLabel, 0, Qt::AlignLeft);
     topRow->addWidget(m_statusLabel, 1, Qt::AlignRight);
     vl->addLayout(topRow);
 
     // Hint (idle state)
     m_hintLabel = new QLabel("空闲");
-    m_hintLabel->setStyleSheet("color: #86909C; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    m_hintLabel->setStyleSheet("color: #94A3B8; font-size: 12px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     m_hintLabel->setAlignment(Qt::AlignCenter);
     vl->addWidget(m_hintLabel);
 
     // Size info
     m_sizeLabel = new QLabel("");
-    m_sizeLabel->setStyleSheet("color: #4E5969; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    m_sizeLabel->setStyleSheet("color: #475569; font-size: 12px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     m_sizeLabel->setAlignment(Qt::AlignCenter);
     vl->addWidget(m_sizeLabel);
 
-    vl->addStretch();
+    vl->addStretch(1);
 
     // Progress bar (hidden by default)
     m_overallProgress = new QProgressBar();
     m_overallProgress->setVisible(false);
     m_overallProgress->setStyleSheet(R"(
         QProgressBar {
-            height: 4px;
-            border-radius: 2px;
-            background: rgba(0,0,0,0.08);
+            height: 6px;
+            border-radius: 3px;
+            background: #E2E8F0;
             text-align: center;
         }
         QProgressBar::chunk {
-            background: #165DFF;
-            border-radius: 2px;
+            background: #3B82F6;
+            border-radius: 3px;
         }
     )");
     vl->addWidget(m_overallProgress);
@@ -69,10 +78,10 @@ USBCard::USBCard(QWidget* parent)
     QHBoxLayout* speedRow = new QHBoxLayout();
     speedRow->setSpacing(4);
     m_speedLabel = new QLabel("");
-    m_speedLabel->setStyleSheet("color: #86909C; font-size: 10px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    m_speedLabel->setStyleSheet("color: #64748B; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     m_speedLabel->setVisible(false);
     m_etaLabel = new QLabel("");
-    m_etaLabel->setStyleSheet("color: #86909C; font-size: 10px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    m_etaLabel->setStyleSheet("color: #64748B; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     m_etaLabel->setVisible(false);
     speedRow->addWidget(m_speedLabel);
     speedRow->addStretch();
@@ -81,24 +90,26 @@ USBCard::USBCard(QWidget* parent)
 
     // Current file
     m_currentFileLabel = new QLabel("");
-    m_currentFileLabel->setStyleSheet("color: #86909C; font-size: 9px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    m_currentFileLabel->setStyleSheet("color: #64748B; font-size: 10px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     m_currentFileLabel->setVisible(false);
     m_currentFileLabel->setWordWrap(true);
     vl->addWidget(m_currentFileLabel);
 
+    vl->addStretch(1);
+
     // Buttons row
     QHBoxLayout* btnLayout = new QHBoxLayout();
-    btnLayout->setSpacing(6);
+    btnLayout->setSpacing(8);
 
     m_formatBtn = new QPushButton("格式化");
     m_formatBtn->setVisible(false);
     m_formatBtn->setStyleSheet(R"(
         QPushButton {
             background: #FEE2E2;
-            color: #F53F3F;
+            color: #EF4444;
             border: none;
-            border-radius: 4px;
-            padding: 3px 8px;
+            border-radius: 6px;
+            padding: 4px 10px;
             font-size: 11px;
             font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
         }
@@ -110,15 +121,15 @@ USBCard::USBCard(QWidget* parent)
     m_ejectBtn->setVisible(false);
     m_ejectBtn->setStyleSheet(R"(
         QPushButton {
-            background: #F3F4F6;
-            color: #4E5969;
+            background: #F1F5F9;
+            color: #475569;
             border: none;
-            border-radius: 4px;
-            padding: 3px 8px;
+            border-radius: 6px;
+            padding: 4px 10px;
             font-size: 11px;
             font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
         }
-        QPushButton:hover { background: #E5E7EB; }
+        QPushButton:hover { background: #E2E8F0; }
     )");
     connect(m_ejectBtn, &QPushButton::clicked, this, [this](){ emit ejectClicked(m_drive); });
 
@@ -126,15 +137,15 @@ USBCard::USBCard(QWidget* parent)
     m_cancelBtn->setVisible(false);
     m_cancelBtn->setStyleSheet(R"(
         QPushButton {
-            background: #F3F4F6;
-            color: #86909C;
+            background: #F1F5F9;
+            color: #64748B;
             border: none;
-            border-radius: 4px;
-            padding: 3px 8px;
+            border-radius: 6px;
+            padding: 4px 10px;
             font-size: 11px;
             font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
         }
-        QPushButton:hover { background: #E5E7EB; }
+        QPushButton:hover { background: #E2E8F0; }
     )");
     connect(m_cancelBtn, &QPushButton::clicked, this, [this](){ emit cancelDumpClicked(m_drive); });
 
@@ -151,24 +162,32 @@ void USBCard::setDrive(const QString& letter, const QString& label,
     m_drive = letter;
     QString labelStr = label.isEmpty() ? "" : (" " + label);
     m_driveLabel->setText(letter + labelStr);
-    m_driveLabel->setStyleSheet("color: #165DFF; font-size: 13px; font-weight: 700; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    m_driveLabel->setStyleSheet("color: #3B82F6; font-size: 14px; font-weight: 700; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
 
-    // Blue background for USB, gray for local drive
+    // USB: blue tint, local drive: gray tint
     bool isLocal = label.toUpper().contains("SSD") || label.toUpper().contains("本地") || label.toUpper().contains("HDD");
     if (isLocal) {
         setStyleSheet(R"(
             QFrame {
-                background: #F5F7FA;
-                border: 1px solid #E5E6EB;
-                border-radius: 8px;
+                background: #F1F5F9;
+                border: 1px solid #E2E8F0;
+                border-radius: 12px;
+            }
+            QFrame:hover {
+                border-color: #94A3B8;
+                background: #F8FAFC;
             }
         )");
     } else {
         setStyleSheet(R"(
             QFrame {
-                background: #E8F3FF;
-                border: 1px solid #C6DCFF;
-                border-radius: 8px;
+                background: #F8FAFC;
+                border: 1px solid #CBD5E1;
+                border-radius: 12px;
+            }
+            QFrame:hover {
+                border-color: #3B82F6;
+                background: #F8FAFC;
             }
         )");
     }
@@ -190,10 +209,12 @@ void USBCard::setStatus(const QString& s) {
 
     if (s == "idle") {
         m_statusLabel->setText("");
+        m_statusBar->setStyleSheet("background: #E2E8F0; border: none; border-radius: 2px;");
         m_hintLabel->setVisible(true);
     } else if (s == "copying") {
         m_statusLabel->setText("复制中");
-        m_statusLabel->setStyleSheet("color: #165DFF; font-size: 10px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+        m_statusLabel->setStyleSheet("color: #3B82F6; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+        m_statusBar->setStyleSheet("background: #3B82F6; border: none; border-radius: 2px;");
         m_overallProgress->setVisible(true);
         m_speedLabel->setVisible(true);
         m_etaLabel->setVisible(true);
@@ -201,12 +222,14 @@ void USBCard::setStatus(const QString& s) {
         m_cancelBtn->setVisible(true);
     } else if (s == "done") {
         m_statusLabel->setText("已完成");
-        m_statusLabel->setStyleSheet("color: #00B42A; font-size: 10px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; font-weight: 500;");
+        m_statusLabel->setStyleSheet("color: #10B981; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; font-weight: 500;");
+        m_statusBar->setStyleSheet("background: #10B981; border: none; border-radius: 2px;");
         m_formatBtn->setVisible(true);
         m_ejectBtn->setVisible(true);
     } else if (s == "formatting") {
         m_statusLabel->setText("格式化中");
-        m_statusLabel->setStyleSheet("color: #FF7D00; font-size: 10px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; font-weight: 500;");
+        m_statusLabel->setStyleSheet("color: #F59E0B; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; font-weight: 500;");
+        m_statusBar->setStyleSheet("background: #F59E0B; border: none; border-radius: 2px;");
     }
 }
 
@@ -238,15 +261,20 @@ void USBCard::updateProgress(int done, int total,
 void USBCard::clear() {
     m_drive.clear();
     m_driveLabel->setText("空闲");
-    m_driveLabel->setStyleSheet("color: #86909C; font-size: 13px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
+    m_driveLabel->setStyleSheet("color: #64748B; font-size: 14px; font-weight: 600; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     m_statusLabel->setText("");
     m_sizeLabel->setText("");
     m_hintLabel->setVisible(true);
+    m_statusBar->setStyleSheet("background: #E2E8F0; border: none; border-radius: 2px;");
     setStyleSheet(R"(
         QFrame {
-            background: #F9FAFB;
-            border: 1px solid #E5E6EB;
-            border-radius: 8px;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+        }
+        QFrame:hover {
+            border-color: #3B82F6;
+            background: #F8FAFC;
         }
     )");
     m_overallProgress->setVisible(false);

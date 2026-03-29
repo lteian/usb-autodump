@@ -21,6 +21,7 @@ enum FTPState {
     Connecting,
     Authenticating,
     Connected,
+    WaitingMKD,
     WaitingPASV,
     WaitingSTOR,
     Uploading,
@@ -84,6 +85,8 @@ private:
     qint64 m_bytesWritten = 0;
     FTPState m_state = Idle;
     QFile m_file;
+    QStringList m_mkdirQueue;
+    int m_mkdirIndex = 0;
 };
 
 #endif // FTP_PROCESS_H

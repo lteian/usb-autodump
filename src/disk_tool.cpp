@@ -1,5 +1,4 @@
 #include "disk_tool.h"
-#include "disk_tool.h"
 #include <QProcess>
 #include <QDebug>
 #include <QCoreApplication>

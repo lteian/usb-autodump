@@ -21,6 +21,10 @@ FileRecordDB::FileRecordDB() {
     ensureTable();
 }
 
+FileRecordDB::~FileRecordDB() {
+    delete d;
+}
+
 FileRecordDB& FileRecordDB::instance() {
     static FileRecordDB inst;
     return inst;
@@ -67,21 +71,39 @@ void FileRecordDB::updateStatus(int id, const QString& status, const QString& er
     QSqlQuery q(d->db);
     QString ts = QDateTime::currentDateTime().toString(Qt::ISODate);
     if (status == "copied") {
-        q.exec(QString("UPDATE file_records SET status='copied',copied_at='%1' WHERE id=%2").arg(ts).arg(id));
+        q.prepare("UPDATE file_records SET status='copied',copied_at=? WHERE id=?");
+        q.bindValue(0, ts);
+        q.bindValue(1, id);
+        q.exec();
     } else if (status == "uploaded") {
-        q.exec(QString("UPDATE file_records SET status='uploaded',uploaded_at='%1' WHERE id=%2").arg(ts).arg(id));
+        q.prepare("UPDATE file_records SET status='uploaded',uploaded_at=? WHERE id=?");
+        q.bindValue(0, ts);
+        q.bindValue(1, id);
+        q.exec();
     } else if (status == "deleted") {
-        q.exec(QString("UPDATE file_records SET status='deleted',deleted_at='%1' WHERE id=%2").arg(ts).arg(id));
+        q.prepare("UPDATE file_records SET status='deleted',deleted_at=? WHERE id=?");
+        q.bindValue(0, ts);
+        q.bindValue(1, id);
+        q.exec();
     } else if (status == "error") {
-        q.exec(QString("UPDATE file_records SET status='error',error_msg='%1' WHERE id=%2").arg(err).arg(id));
+        q.prepare("UPDATE file_records SET status='error',error_msg=? WHERE id=?");
+        q.bindValue(0, err);
+        q.bindValue(1, id);
+        q.exec();
     } else {
-        q.exec(QString("UPDATE file_records SET status='%1' WHERE id=%2").arg(status).arg(id));
+        q.prepare("UPDATE file_records SET status=? WHERE id=?");
+        q.bindValue(0, status);
+        q.bindValue(1, id);
+        q.exec();
     }
 }
 
 void FileRecordDB::updateFtpPath(int id, const QString& path) {
     QSqlQuery q(d->db);
-    q.exec(QString("UPDATE file_records SET ftp_path='%1' WHERE id=%2").arg(path).arg(id));
+    q.prepare("UPDATE file_records SET ftp_path=? WHERE id=?");
+    q.bindValue(0, path);
+    q.bindValue(1, id);
+    q.exec();
 }
 
 QList<FileRecord> FileRecordDB::pendingRecords() {
@@ -109,7 +131,9 @@ QList<FileRecord> FileRecordDB::pendingRecords() {
 QList<FileRecord> FileRecordDB::recordsForDrive(const QString& drive) {
     QList<FileRecord> list;
     QSqlQuery q(d->db);
-    q.exec(QString("SELECT * FROM file_records WHERE usb_drive='%1'").arg(drive));
+    q.prepare("SELECT * FROM file_records WHERE usb_drive=?");
+    q.bindValue(0, drive);
+    q.exec();
     while (q.next()) {
         FileRecord r;
         r.id = q.value("id").toInt();

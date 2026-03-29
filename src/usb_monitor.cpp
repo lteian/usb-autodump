@@ -40,7 +40,6 @@ void USBMonitor::poll() {
     // Detect inserted
     for (const QString& letter : currentMap.keys()) {
         if (!m_lastDevices.contains(letter)) {
-            qDebug() << "USB inserted:" << letter;
             emit deviceInserted(currentMap[letter]);
         }
     }
@@ -48,7 +47,6 @@ void USBMonitor::poll() {
     // Detect removed
     for (const QString& letter : m_lastDevices.keys()) {
         if (!currentMap.contains(letter)) {
-            qDebug() << "USB removed:" << letter;
             emit deviceRemoved(letter);
         }
     }
