@@ -22,8 +22,12 @@ jobs:
       - name: Configure CMake
         shell: msys2 {0}
         run: |
+          echo "=== Checking Qt5 Installation ==="
+          ls -la /mingw64/lib/cmake/ 2>/dev/null | head -20 || echo "No cmake dir found"
+          ls -la /mingw64/bin/qmake.exe 2>/dev/null || echo "No qmake found"
+          echo "=== Running cmake ==="
           mkdir -p build
-          cmake -G "MinGW Makefiles" -B build -S . -DCMAKE_BUILD_TYPE=Release
+          cmake -G "MinGW Makefiles" -B build -S . -DCMAKE_BUILD_TYPE=Release 2>&1
 
       - name: Build
         shell: msys2 {0}
