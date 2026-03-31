@@ -23,7 +23,7 @@ jobs:
 
       - name: Set Qt path
         run: |
-          $qtBin = "C:\Qt\5.15.2\win64_msvc2019_64\bin"
+          $qtBin = "C:\Qt\5.15.2\msvc2019_64\bin"
           if (!(Test-Path $qtBin)) {
             echo "ERROR: Qt bin path not found at $qtBin"
             Get-ChildItem C:\Qt\ 2>$null | ForEach-Object { echo $_.Name }
