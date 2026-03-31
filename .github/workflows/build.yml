@@ -19,7 +19,7 @@ jobs:
       - name: Install Qt5
         run: |
           pip install aqtinstall
-          aqt install-qt windows win64_msvc2019_64 5.15.2 -O C:\Qt
+          aqt install-qt windows 5.15.2 win64_msvc2019_64 -O C:\Qt
 
       - name: Set Qt path
         run: |

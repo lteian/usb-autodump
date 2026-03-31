@@ -29,10 +29,11 @@ jobs:
           mkdir -p $PKG/DEBIAN
           mkdir -p $PKG/usr/local/bin
           mkdir -p $PKG/usr/share/applications
-          # Find the actual binary under build/dist/*/
-          BINARY=$(find build/dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
+          # Binary goes to CMAKE_SOURCE_DIR/dist/<date>/ (repo root), not build/dist/
+          BINARY=$(find dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
           if [ -z "$BINARY" ]; then
-            echo "ERROR: usb-autodump binary not found in build/dist"
+            echo "ERROR: usb-autodump binary not found in dist"
+            find dist -type f 2>/dev/null
             exit 1
           fi
           cp "$BINARY" $PKG/usr/local/bin/usb-autodump
