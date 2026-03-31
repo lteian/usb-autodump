@@ -162,3 +162,38 @@ usb_autodump_cpp/
 - **Botan** 或 **libsodium**（加密，如不用 Qt 内置）
 
 优先使用 Qt 内置功能，减少外部依赖。
+
+---
+
+## 10. 变更日志 (Changelog)
+
+### v2026-03-31
+
+**FTP 编码支持**
+- 添加 FTP 路径编码选项（UTF-8 / GBK），解决群晖等服务器中文路径乱码
+- MKD（创建目录）和 STOR（上传文件）命令根据编码设置发送路径
+- 设置路径：设置 → FTP设置 → 路径编码
+
+**U盘卡片 UI 优化**
+- 显示容量指示条（绿色横条表示已用空间比例）
+- 状态显示优化：
+  - 无视频文件 → 显示"无视频文件"（灰色）
+  - 有文件转储完成 → 显示"转储完成"（绿色）
+  - 复制中 → 显示"复制中"（蓝色）
+
+**格式化功能修复**
+- 改用 PowerShell `Format-Volume` 替代 `diskpart`，修复格式化失败问题
+- 格式化成功后将 `license.txt`（位于 exe 同目录）复制到U盘根目录
+
+**其他修复**
+- 修复 mainwindow.cpp QLayout 警告（leftVl 不能 addWidget 自身）
+
+### v2026-03-29
+
+**初始版本**
+- USB 自动检测与显示（最多4个卡片）
+- 视频文件转储（mp4/avi/mkv/mov/wmv/flv/webm/m4v/mpg/mpeg）
+- FTP 上传队列管理（支持 TLS）
+- 密码加密存储（AES-256）
+- 本地/远程日志系统（按天滚动，5MB限制）
+- GitHub Actions 自动构建 Release
