@@ -32,14 +32,15 @@ jobs:
           Add-Content $env:GITHUB_PATH $qtBin
 
       - name: Configure CMake
-        working-directory: build
         run: |
           mkdir build
+          cd build
           cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release ..
 
       - name: Build
-        working-directory: build
-        run: cmake --build . --config Release
+        run: |
+          cd build
+          cmake --build . --config Release
 
       - name: Package
         run: |
