@@ -55,6 +55,23 @@ USBCard::USBCard(QWidget* parent)
     m_sizeLabel->setAlignment(Qt::AlignCenter);
     vl->addWidget(m_sizeLabel);
 
+    // Capacity bar (shows USB usage)
+    m_capacityBar = new QProgressBar();
+    m_capacityBar->setVisible(false);
+    m_capacityBar->setStyleSheet(R"(
+        QProgressBar {
+            height: 4px;
+            border-radius: 2px;
+            background: #E2E8F0;
+            text-align: center;
+        }
+        QProgressBar::chunk {
+            background: #10B981;
+            border-radius: 2px;
+        }
+    )");
+    vl->addWidget(m_capacityBar);
+
     vl->addStretch(1);
 
     // Progress bar (hidden by default)
@@ -194,6 +211,17 @@ void USBCard::setDrive(const QString& letter, const QString& label,
 
     m_sizeLabel->setText(fmtSize(total));
     m_sizeLabel->setAlignment(Qt::AlignCenter);
+
+    // Show capacity bar
+    if (total > 0) {
+        int usedPct = int((used * 100) / total);
+        m_capacityBar->setRange(0, 100);
+        m_capacityBar->setValue(usedPct);
+        m_capacityBar->setVisible(true);
+    } else {
+        m_capacityBar->setVisible(false);
+    }
+
     setStatus("idle");
 }
 
@@ -206,6 +234,7 @@ void USBCard::setStatus(const QString& s) {
     m_etaLabel->setVisible(false);
     m_currentFileLabel->setVisible(false);
     m_hintLabel->setVisible(false);
+    m_capacityBar->setVisible(true); // show capacity bar by default
 
     if (s == "idle") {
         m_statusLabel->setText("");
@@ -220,10 +249,17 @@ void USBCard::setStatus(const QString& s) {
         m_etaLabel->setVisible(true);
         m_currentFileLabel->setVisible(true);
         m_cancelBtn->setVisible(true);
+        m_capacityBar->setVisible(false); // hide capacity bar during copy
     } else if (s == "done") {
-        m_statusLabel->setText("已完成");
+        m_statusLabel->setText("转储完成");
         m_statusLabel->setStyleSheet("color: #10B981; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; font-weight: 500;");
         m_statusBar->setStyleSheet("background: #10B981; border: none; border-radius: 2px;");
+        m_formatBtn->setVisible(true);
+        m_ejectBtn->setVisible(true);
+    } else if (s == "no_files") {
+        m_statusLabel->setText("无视频文件");
+        m_statusLabel->setStyleSheet("color: #94A3B8; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; font-weight: 500;");
+        m_statusBar->setStyleSheet("background: #94A3B8; border: none; border-radius: 2px;");
         m_formatBtn->setVisible(true);
         m_ejectBtn->setVisible(true);
     } else if (s == "formatting") {

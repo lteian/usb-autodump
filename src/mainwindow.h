@@ -84,6 +84,7 @@ private:
 
     bool m_ftpConnected = false;
     int m_activeDumpCount = 0;
+    QMap<QString, bool> m_driveHasFiles; // track if drive had video files to copy
 };
 
 #endif // MAINWINDOW_H

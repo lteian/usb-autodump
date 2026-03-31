@@ -2,6 +2,9 @@
 #include <QProcess>
 #include <QDebug>
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QTemporaryFile>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -16,15 +19,23 @@ bool DiskTool::formatDrive(const QString& drive, const QString& fs, const QStrin
     if (!drv.endsWith(":")) drv += ":";
 
 #ifdef _WIN32
-    QString script = QString("select volume %1\nformat fs=%2 label=\"%3\" quick\nassign\nexit\n")
-                         .arg(drv)
-                         .arg(fs)
-                         .arg(label);
-
+    // Use PowerShell's Format-Volume - works well in scripts, no admin needed for quick format
     QProcess p;
     p.setProcessChannelMode(QProcess::MergedChannels);
-    p.start("diskpart", QStringList() << "/s" << script);
-    p.waitForFinished(120000);
+    // Extract drive letter without colon (e.g., "D")
+    QString driveLetter = drv;
+    driveLetter.chop(1); // remove trailing colon
+    QString psCmd = QString("Format-Volume -DriveLetter %1 -FileSystem %2 -Confirm:$false -Force")
+                        .arg(driveLetter)
+                        .arg(fs.toUpper());
+    p.start("powershell.exe", QStringList() << "-NoProfile" << "-Command" << psCmd);
+    // Format may take up to 2 minutes
+    bool finished = p.waitForFinished(120000);
+    if (!finished) {
+        p.kill();
+        qWarning() << "format timed out";
+        return false;
+    }
     if (p.exitCode() != 0) {
         qWarning() << "format failed:" << p.readAll();
         return false;

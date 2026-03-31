@@ -368,6 +368,7 @@ void MainWindow::onDumpScanStarted(const QString& drive) {
 
 void MainWindow::onDumpScanDone(const QString& drive, int totalFiles, qint64 totalSize) {
     USBCard* card = m_driveToCard.value(drive, nullptr);
+    m_driveHasFiles[drive] = (totalFiles > 0);
     if (card) {
         m_logPanel->appendInfo(QString("%1 扫描完成: %2 个文件 (%3)")
             .arg(drive).arg(totalFiles).arg(formatSize(totalSize)));
@@ -395,6 +396,7 @@ void MainWindow::onDumpCopyFileDone(const QString& drive, const QString& file,
     if (!card) {
         return;
     }
+    m_driveHasFiles[drive] = true;
     QString fname = file;
     int p = fname.lastIndexOf('/');
     if (p < 0) p = fname.lastIndexOf('\\');
@@ -431,8 +433,13 @@ void MainWindow::onDumpCopyFileDone(const QString& drive, const QString& file,
 void MainWindow::onDumpCopyAllDone(const QString& drive) {
     USBCard* card = m_driveToCard.value(drive, nullptr);
     if (card) {
-        card->setStatus("done");
-        m_logPanel->appendInfo(drive + " 全部复制完成");
+        if (!m_driveHasFiles.value(drive, false)) {
+            card->setStatus("no_files");
+            m_logPanel->appendInfo(drive + " 无视频文件");
+        } else {
+            card->setStatus("done");
+            m_logPanel->appendInfo(drive + " 转储完成");
+        }
     }
     updateStatusBar();
 }
@@ -521,8 +528,25 @@ void MainWindow::onFormatClicked(const QString& drive) {
     card->setStatus("formatting");
     m_logPanel->appendWarning("开始格式化 " + drive + " ...");
     bool ok = DiskTool::formatDrive(drive);
+    if (ok) {
+        // Copy license file to USB root
+        QString appDir = QCoreApplication::applicationDirPath();
+        QString licenseSrc = appDir + "/license.txt";
+        QString licenseDst = drive + "/license.txt";
+        if (QFile::exists(licenseSrc)) {
+            if (QFile::copy(licenseSrc, licenseDst)) {
+                m_logPanel->appendInfo("已复制授权文件到 " + drive);
+            } else {
+                m_logPanel->appendWarning("复制授权文件失败: " + licenseSrc);
+            }
+        } else {
+            m_logPanel->appendWarning("未找到授权文件: " + licenseSrc);
+        }
+        card->setStatus("no_files");
+    } else {
+        card->setStatus("done");
+    }
     m_logPanel->appendInfo(ok ? ("格式化成功: " + drive) : ("格式化失败: " + drive));
-    if (card) card->setStatus("done");
 }
 
 void MainWindow::onEjectClicked(const QString& drive) {

@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QSpinBox>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QTableWidget>
 #include <QLabel>
 
@@ -36,6 +37,7 @@ private:
     QLineEdit* m_ftpPass = nullptr;
     QLineEdit* m_ftpSubPath = nullptr;
     QCheckBox* m_ftpTls = nullptr;
+    QComboBox* m_ftpEncoding = nullptr;
 
     // Advanced tab
     QCheckBox* m_autoFormat = nullptr;

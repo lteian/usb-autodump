@@ -7,6 +7,7 @@
 #include <QMutex>
 #include <QTcpSocket>
 #include <QFile>
+#include <QTextCodec>
 
 struct FTPUploadTask {
     int recordId = 0;
@@ -68,6 +69,7 @@ private:
     void disconnectFromHost();
     void handleResponse(const QString& line);
     void removeEmptyParentDirs(const QString& filePath);
+    QByteArray encodePath(const QString& path);
 
     QQueue<FTPUploadTask> m_queue;
     QMutex m_mutex;
@@ -87,6 +89,7 @@ private:
     QFile m_file;
     QStringList m_mkdirQueue;
     int m_mkdirIndex = 0;
+    QString m_encoding = "utf8";
 };
 
 #endif // FTP_PROCESS_H

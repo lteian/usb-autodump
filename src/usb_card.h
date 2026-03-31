@@ -38,6 +38,7 @@ private:
     QLabel* m_statusLabel = nullptr;
     QLabel* m_hintLabel = nullptr;
     QLabel* m_sizeLabel = nullptr;
+    QProgressBar* m_capacityBar = nullptr;
     QProgressBar* m_overallProgress = nullptr;
     QLabel* m_speedLabel = nullptr;
     QLabel* m_etaLabel = nullptr;

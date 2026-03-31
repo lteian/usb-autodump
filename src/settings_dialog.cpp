@@ -175,6 +175,9 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     m_ftpPass->setPlaceholderText("留空则不修改当前密码");
     m_ftpSubPath = new QLineEdit("/");
     m_ftpTls = new QCheckBox("使用 TLS/SSL (FTPS)");
+    m_ftpEncoding = new QComboBox();
+    m_ftpEncoding->addItem("UTF-8", "utf8");
+    m_ftpEncoding->addItem("GBK (中文服务器)", "gbk");
 
     ftpFl->addRow("服务器地址:", m_ftpHost);
     ftpFl->addRow("端口:", m_ftpPort);
@@ -182,6 +185,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     ftpFl->addRow("密码:", m_ftpPass);
     ftpFl->addRow("子路径:", m_ftpSubPath);
     ftpFl->addRow("", m_ftpTls);
+    ftpFl->addRow("路径编码:", m_ftpEncoding);
 
     QPushButton* testBtn = new QPushButton("测试FTP连接");
     testBtn->setStyleSheet(R"(
@@ -261,6 +265,8 @@ void SettingsDialog::loadCurrentConfig() {
     m_ftpUser->setText(ftp.value("username").toString());
     m_ftpSubPath->setText(ftp.value("sub_path").toString("/"));
     m_ftpTls->setChecked(ftp.value("use_tls").toBool());
+    int idx = m_ftpEncoding->findData(ftp.value("encoding").toString("utf8"));
+    if (idx >= 0) m_ftpEncoding->setCurrentIndex(idx);
 
     m_autoFormat->setChecked(cfg.autoFormatAfterCopy());
     m_autoDelete->setChecked(cfg.autoDeleteLocal());
@@ -331,6 +337,7 @@ void SettingsDialog::onSave() {
     }
     ftp["sub_path"] = m_ftpSubPath->text().trimmed().replace(QRegularExpression("/+$"), "");
     ftp["use_tls"] = m_ftpTls->isChecked();
+    ftp["encoding"] = m_ftpEncoding->currentData().toString();
     ftp["max_retry"] = m_retrySpin->value();
 
     QJsonObject root;

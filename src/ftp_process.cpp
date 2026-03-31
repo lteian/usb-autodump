@@ -64,6 +64,7 @@ void FTPProcess::connectToHost() {
     }
     m_user = user;
     m_pass = pass;
+    m_encoding = ftp.value("encoding").toString("utf8");
     if (host.isEmpty()) {
         emit uploadError(0, "FTP未配置服务器地址");
         cleanupAndNext();
@@ -234,7 +235,7 @@ void FTPProcess::ensureRemoteDir(const QString& remotePath) {
 
 void FTPProcess::sendMkdirSync(const QString& path) {
     if (!m_cmdSocket || m_cmdSocket->state() != QAbstractSocket::ConnectedState) return;
-    m_cmdSocket->write(QString("MKD " + path + "\r\n").toUtf8());
+    m_cmdSocket->write("MKD " + encodePath(path) + "\r\n");
 }
 
 void FTPProcess::enterPassiveModeStep2() {
@@ -274,7 +275,7 @@ void FTPProcess::onDataConnected() {
     QString remotePath = m_currentTask->remotePath;
     if (!remotePath.startsWith("/")) remotePath = "/" + remotePath;
     m_state = WaitingSTOR;
-    m_cmdSocket->write(QString("STOR " + remotePath + "\r\n").toUtf8());
+    m_cmdSocket->write("STOR " + encodePath(remotePath) + "\r\n");
 }
 
 void FTPProcess::sendFileData() {
@@ -391,4 +392,15 @@ void FTPProcess::removeEmptyParentDirs(const QString& filePath) {
         // Move up one level
         parent = QFileInfo(parentPath).absoluteDir();
     }
+}
+
+QByteArray FTPProcess::encodePath(const QString& path) {
+    if (m_encoding == "gbk") {
+        QTextCodec* codec = QTextCodec::codecForName("GBK");
+        if (codec) {
+            return codec->fromUnicode(path);
+        }
+    }
+    // Default to UTF-8
+    return path.toUtf8();
 }
