@@ -53,10 +53,13 @@ jobs:
           windeployqt $exe --no-translations --no-webkit --no-compiler-runtime
           # windeployqt deploys to the exe directory; copy all those files to dist/
           $exeDir = Split-Path $exe
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item "$exeDir\*" -Destination dist/ -Recurse -Force
+          echo "Files in dist:"
+          Get-ChildItem dist/ | Select-Object Name, Length
 
       - uses: actions/upload-artifact@v4
         with:
           name: usb-autodump-EXE
-          path: dist/usb-autodump.exe
+          path: dist/
           retention-days: 30
