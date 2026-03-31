@@ -19,10 +19,18 @@ jobs:
       - name: Install Qt5
         run: |
           pip install aqtinstall
-          aqt install-qt windows win64_msvc2019_64 5.15.2 -O C:\Qt
+          aqt install-qt windows win64_msvc2022_64 5.15.16 -O C:\Qt
 
       - name: Set Qt path
-        run: Add-Content $env:GITHUB_PATH "C:\Qt\5.15.2\win64_msvc2019_64\bin"
+        run: |
+          $qtBin = "C:\Qt\5.15.16\win64_msvc2022_64\bin"
+          if (!(Test-Path $qtBin)) {
+            echo "ERROR: Qt bin path not found at $qtBin"
+            Get-ChildItem C:\Qt\5.15.16\ 2>$null | ForEach-Object { echo $_.Name }
+            exit 1
+          }
+          Add-Content $env:GITHUB_PATH $qtBin
+          echo "Qt path added: $qtBin"
 
       - name: Configure CMake
         working-directory: build
