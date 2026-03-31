@@ -44,9 +44,15 @@ jobs:
 
       - name: Package
         run: |
+          $exe = Get-ChildItem -Recurse -Filter "usb-autodump.exe" . | Select-Object -First 1 -ExpandProperty FullName
+          if (!$exe) {
+            echo "ERROR: usb-autodump.exe not found"
+            exit 1
+          }
+          echo "Found exe at: $exe"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          windeployqt build/Release/usb-autodump.exe --no-translations --no-webkit --no-compiler-runtime
-          cp build/Release/usb-autodump.exe dist/
+          windeployqt $exe --no-translations --no-webkit --no-compiler-runtime
+          cp $exe dist/
 
       - uses: actions/upload-artifact@v4
         with:
