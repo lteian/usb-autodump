@@ -12,31 +12,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Qt
-        uses: jurplel/action-setup-qt@v4
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
         with:
-          version: '5.15.2'
-          arch: 'win64_mingw81_64'
-          cached: true
+          msystem: mingw64
+          update: true
+          install: mingw-w64-x86_64-qt5-base mingw-w64-x86_64-qt5-tools
 
       - name: Configure CMake
+        shell: msys2 {0}
         run: |
-          mkdir build
+          mkdir -p build
           cmake -G "MinGW Makefiles" -B build -S . -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --parallel
+        shell: msys2 {0}
+        run: |
+          cmake --build build --parallel
 
       - name: Deploy Qt DLLs
+        shell: msys2 {0}
         run: |
-          C:\Qt\5.15.2\win64_mingw81_64\bin\windeployqt.exe --no-translations build/usb-autodump.exe
+          windeployqt.exe --no-translations build/usb-autodump.exe
 
       - name: Package
         shell: bash
         run: |
           mkdir -p dist/${{ github.ref_name }}
           cp build/usb-autodump.exe dist/${{ github.ref_name }}/
-          cp -r C:/Qt/5.15.2/win64_mingw81_64/bin/*.dll dist/${{ github.ref_name }}/ 2>/dev/null || true
+          cp /C/msys64/mingw64/bin/*.dll dist/${{ github.ref_name }}/ 2>/dev/null || true
           ls -la dist/${{ github.ref_name }}/
 
       - uses: softprops/action-gh-release@v1
