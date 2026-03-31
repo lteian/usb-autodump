@@ -12,18 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Qt
+        uses: jurplel/action-setup-qt@v4
         with:
-          python-version: '3.11'
-
-      - name: Install Qt5 (MinGW)
-        run: |
-          pip install aqtinstall==4.3.2
-          aqt install-qt windows desktop win64_mingw81 -O C:\Qt 5.15.2 --verbose 2>&1 || echo "Exit code: $?"
-
-      - name: Set Qt path
-        run: Add-Content $env:GITHUB_PATH "C:\Qt\5.15.2\win64_mingw81_64\bin"
+          version: '5.15.2'
+          arch: 'win64_mingw81_64'
+          cached: true
 
       - name: Configure CMake
         run: |
@@ -42,7 +36,6 @@ jobs:
         run: |
           mkdir -p dist/${{ github.ref_name }}
           cp build/usb-autodump.exe dist/${{ github.ref_name }}/
-          cp -r build/*.dll dist/${{ github.ref_name }}/ 2>/dev/null || true
           cp -r C:/Qt/5.15.2/win64_mingw81_64/bin/*.dll dist/${{ github.ref_name }}/ 2>/dev/null || true
           ls -la dist/${{ github.ref_name }}/
 
