@@ -1,0 +1,51 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      windows_run_id:
+        description: 'Windows EXE build run ID'
+        required: false
+        type: string
+      linux_run_id:
+        description: 'Linux DEB build run ID'
+        required: false
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download EXE artifact
+        if: github.event.inputs.windows_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: usb-autodump-EXE
+          path: exe
+          run-id: ${{ github.event.inputs.windows_run_id }}
+
+      - name: Download DEB artifact
+        if: github.event.inputs.linux_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: usb-autodump-DEB
+          path: deb
+          run-id: ${{ github.event.inputs.linux_run_id }}
+
+      - name: Display files
+        run: |
+          echo "=== EXE files ===" && ls -lhR exe/ 2>/dev/null && echo "=== DEB files ===" && ls -lh deb/ 2>/dev/null || echo "No files downloaded"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.3.0-cpp
+          name: USB AutoDump v1.3.0 (cpp)
+          body: "Auto-generated release from cpp branch - C++/Qt5 rewrite"
+          draft: false
+          prerelease: false
+          files: |
+            exe/**
+            deb/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
