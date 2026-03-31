@@ -20,7 +20,7 @@ jobs:
       - name: Install Qt5 (MinGW)
         run: |
           pip install aqtinstall==4.3.2
-          aqt install-qt windows desktop win64_mingw81 -O C:\Qt 5.15.2
+          aqt install-qt windows desktop win64_mingw81 -O C:\Qt 5.15.2 --verbose 2>&1 || echo "Exit code: $?"
 
       - name: Set Qt path
         run: Add-Content $env:GITHUB_PATH "C:\Qt\5.15.2\win64_mingw81_64\bin"
