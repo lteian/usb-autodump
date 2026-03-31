@@ -50,9 +50,10 @@ jobs:
             exit 1
           }
           echo "Found exe at: $exe"
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
           windeployqt $exe --no-translations --no-webkit --no-compiler-runtime
-          cp $exe dist/
+          # windeployqt deploys to the exe directory; copy all those files to dist/
+          $exeDir = Split-Path $exe
+          Copy-Item "$exeDir\*" -Destination dist/ -Recurse -Force
 
       - uses: actions/upload-artifact@v4
         with:
