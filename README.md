@@ -139,3 +139,9 @@ usb-autodump/
 ## 许可证
 
 本项目仅供个人 / 内部使用。license.txt 位于 exe 同目录，格式化 U 盘时会自动复制到 U 盘根目录。
+
+---
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE) 开源。
