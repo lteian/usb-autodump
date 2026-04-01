@@ -22,29 +22,82 @@ jobs:
           cmake ..
           cmake --build . --config Release
 
-      - name: Package DEB
+      - name: Install linuxdeployqt
         run: |
+          wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage -O /tmp/linuxdeployqt
+          chmod +x /tmp/linuxdeployqt
+          wget -q https://github.com/staticlibs/desktop-file-utils/releases/download/continuous/desktop-file-utils-continuous-x86_64.AppImage -O /tmp/desktop-file-utils
+          chmod +x /tmp/desktop-file-utils
+
+      - name: Bundle Qt libs with linuxdeployqt
+        env:
+          QMake: /usr/lib/qt5/bin/qmake
+        run: |
+          cd /tmp
+          # Set up Qt plugins path
+          export QT_QPA_PLATFORM=minimal
+          # Bundle the binary and all Qt dependencies into a temp dir
+          /tmp/linuxdeployqt /home/runner/work/usb-autodump/usb-autodump/dist/*/usb-autodump \
+            -unsupported-allow-new-glibc \
+            -no-translations \
+            -no-strip \
+            -appimage-extract-and-run 2>&1 | tail -20
+          echo "--- linuxdeployqt done ---"
+          ls -la /home/runner/work/usb-autodump/usb-autodump/dist/*/ 2>/dev/null || echo "dist not found"
+
+      - name: Package DEB with fpm
+        run: |
+          sudo apt-get install -y ruby ruby-dev rubygems build-essential
+          sudo gem install fpm --no-document
+
           PKG=/tmp/usb-autodump-pkg
           rm -rf $PKG
           mkdir -p $PKG/DEBIAN
           mkdir -p $PKG/usr/local/bin
           mkdir -p $PKG/usr/share/applications
-          # Binary goes to CMAKE_SOURCE_DIR/dist/<date>/ (repo root), not build/dist/
-          BINARY=$(find dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
-          if [ -z "$BINARY" ]; then
-            echo "ERROR: usb-autodump binary not found in dist"
-            find dist -type f 2>/dev/null
-            exit 1
+          mkdir -p $PKG/usr/local/lib
+
+          # Find the bundled AppRun or the binary directory
+          BUNDLE_DIR=$(find /home/runner/work/usb-autodump/usb-autodump/dist -name 'squashfs-root' -type d 2>/dev/null | head -1)
+          if [ -n "$BUNDLE_DIR" ]; then
+            # linuxdeployqt created an AppDir
+            cp -r "$BUNDLE_DIR/usr/local/bin/"* $PKG/usr/local/bin/ 2>/dev/null || true
+            cp -r "$BUNDLE_DIR/usr/local/lib/"* $PKG/usr/local/lib/ 2>/dev/null || true
+            # The main binary is in AppRun
+            if [ -f "$BUNDLE_DIR/AppRun" ]; then
+              cp "$BUNDLE_DIR/AppRun" $PKG/usr/local/bin/usb-autodump
+              chmod 755 $PKG/usr/local/bin/usb-autodump
+            fi
           fi
-          cp "$BINARY" $PKG/usr/local/bin/usb-autodump
-          chmod 755 $PKG/usr/local/bin/usb-autodump
-          cp linux/usb-autodump.desktop $PKG/usr/share/applications/usb-autodump.desktop
+
+          # Fallback: just use the original binary if bundle didn't work
+          if [ ! -f $PKG/usr/local/bin/usb-autodump ]; then
+            BINARY=$(find /home/runner/work/usb-autodump/usb-autodump/dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
+            cp "$BINARY" $PKG/usr/local/bin/usb-autodump
+            chmod 755 $PKG/usr/local/bin/usb-autodump
+          fi
+
+          cp /home/runner/work/usb-autodump/usb-autodump/linux/usb-autodump.desktop $PKG/usr/share/applications/usb-autodump.desktop
           chmod 644 $PKG/usr/share/applications/usb-autodump.desktop
+
+          # Copy icon if exists
+          if [ -f /home/runner/work/usb-autodump/usb-autodump/icon.svg ]; then
+            mkdir -p $PKG/usr/share/icons/hicolor/scalable/apps
+            cp /home/runner/work/usb-autodump/usb-autodump/icon.svg $PKG/usr/share/icons/hicolor/scalable/apps/usb-autodump.svg
+          fi
+
           mkdir -p dist
-          printf 'Package: usb-autodump\nVersion: 1.0.0\nSection: utils\nPriority: optional\nArchitecture: amd64\nMaintainer: lteian\nDescription: USB auto dump tool\n' > $PKG/DEBIAN/control
-          printf '#!/bin/bash\nupdate-desktop-database /usr/share/applications/ 2>/dev/null || true\n' > $PKG/DEBIAN/postinst
-          chmod 755 $PKG/DEBIAN/postinst
-          dpkg-deb --build $PKG dist/usb-autodump_1.0.0_amd64.deb
+          fpm -s dir -t deb \
+            -n usb-autodump \
+            -v 1.0.0 \
+            -C $PKG \
+            -p dist/usb-autodump_1.0.0_amd64.deb \
+            --deb-description "USB auto dump tool for UFS video file transfer with FTP upload" \
+            --maintainer "lteian" \
+            --url "https://github.com/lteian/usb-autodump" \
+            --license "MIT" \
+            usr/
+
           ls -lh dist/usb-autodump_1.0.0_amd64.deb
 
       - uses: actions/upload-artifact@v4
