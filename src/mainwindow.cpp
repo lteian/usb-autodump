@@ -172,7 +172,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_diskSpaceWidget->setMinimumSize(100, 100);
     middleVl->addWidget(m_diskSpaceWidget, 4);  // stretch 4 = 80%
 
-    m_diskSpaceLabel = new QLabel("磁盘: C:\\");
+    m_diskSpaceLabel = new QLabel("磁盘: C:\");
     m_diskSpaceLabel->setStyleSheet("color: #86909C; font-size: 11px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;");
     middleVl->addWidget(m_diskSpaceLabel);
 
@@ -385,7 +385,7 @@ void MainWindow::onDumpCopyProgress(const QString& drive, const QString& file,
     if (card) {
         QString fname = file;
         int p = fname.lastIndexOf('/');
-        if (p < 0) p = fname.lastIndexOf('\\');
+        if (p < 0) p = fname.lastIndexOf('\');
         if (p >= 0) fname = fname.mid(p + 1);
         card->updateProgress(fileIndex, fileTotal, fileProgress, speedMBps, etaSeconds, fname);
     }
@@ -402,7 +402,7 @@ void MainWindow::onDumpCopyFileDone(const QString& drive, const QString& file,
     m_driveHasFiles[drive] = true;
     QString fname = file;
     int p = fname.lastIndexOf('/');
-    if (p < 0) p = fname.lastIndexOf('\\');
+    if (p < 0) p = fname.lastIndexOf('\');
     if (p >= 0) fname = fname.mid(p + 1);
 
     FileRecord rec;
@@ -731,7 +731,6 @@ void MainWindow::onAbout() {
         "<h2>U盘自动转储工具</h2>"
         "<p>版本 1.0</p>"
         "<p>开源项目，MIT License</p>"
-        ""
         "<p style='color:#6B7280; margin-top:12px;'>"
         "功能：U盘自动转储 → 本地 → FTP上传 → 自动清理<br/>"
         "支持多USB并行转储，FTP目录结构保持"
