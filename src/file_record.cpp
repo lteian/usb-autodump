@@ -3,6 +3,7 @@
 #include <QStandardPaths>
 #include <QSqlDatabase>
 #include <QSqlQuery>
+#include <QSqlError>
 #include <QVariant>
 #include <QFile>
 #include <QDebug>
@@ -31,8 +32,12 @@ FileRecordDB& FileRecordDB::instance() {
 }
 
 QString FileRecordDB::dbPath() {
-    return QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
-               .filePath("usb-autodump/file_records.db");
+    QString dirPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/usb-autodump";
+    QDir dir;
+    if (!dir.mkpath(dirPath)) {
+        qWarning() << "Failed to create directory:" << dirPath;
+    }
+    return dirPath + "/file_records.db";
 }
 
 void FileRecordDB::ensureTable() {
@@ -54,6 +59,10 @@ void FileRecordDB::ensureTable() {
 }
 
 int FileRecordDB::add(const FileRecord& r) {
+    if (!d->db.isOpen()) {
+        qWarning() << "FileRecordDB::add: database not open, trying to reopen...";
+        d->db.open();
+    }
     QSqlQuery q(d->db);
     q.prepare("INSERT OR REPLACE INTO file_records "
               "(usb_drive, file_path, local_path, status, file_size, copied_at) "
@@ -63,7 +72,10 @@ int FileRecordDB::add(const FileRecord& r) {
     q.bindValue(2, r.localPath);
     q.bindValue(3, "pending");
     q.bindValue(4, r.fileSize);
-    q.exec();
+    if (!q.exec()) {
+        qWarning() << "FileRecordDB::add: exec failed:" << q.lastError().text();
+        return -1;
+    }
     return q.lastInsertId().toInt();
 }
 
