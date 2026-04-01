@@ -83,35 +83,54 @@ jobs:
 
       - name: Package DEB with fpm
         run: |
+          set -x
           PKG=/tmp/usb-autodump-pkg
           APPDIR=/tmp/usb-autodump-appdir
+
+          # Verify AppDir structure
+          echo "=== AppDir contents ==="
+          find $APPDIR -type f | head -30
+          echo "=== libs ==="
+          find $APPDIR -name "*.so*" | head -30
+
           rm -rf $PKG
-          mkdir -p $PKG/DEBIAN
           mkdir -p $PKG/usr/local/bin
           mkdir -p $PKG/usr/local/lib
           mkdir -p $PKG/usr/share/applications
+          mkdir -p $PKG/usr/share/icons/hicolor/scalable/apps
 
-          # Copy binary and libs from AppDir
-          if [ -d "$APPDIR/usr/bin" ]; then
-            cp $APPDIR/usr/bin/usb-autodump $PKG/usr/local/bin/ 2>/dev/null || true
-            # Copy all libs
-            for f in $(find $APPDIR -name "*.so*" -type f 2>/dev/null); do
-              mkdir -p "$PKG/usr/local/lib/$(dirname $f | sed "s|$APPDIR||")"
-              cp "$f" "$PKG/usr/local/lib/$(dirname $f | sed "s|$APPDIR||")/"
-            done
+          # Copy binary
+          if [ -f "$APPDIR/usr/bin/usb-autodump" ]; then
+            cp $APPDIR/usr/bin/usb-autodump $PKG/usr/local/bin/
+          else
+            echo "ERROR: binary not in AppDir"
+            exit 1
           fi
 
-          # Fallback if linuxdeployqt didn't work
-          if [ ! -f $PKG/usr/local/bin/usb-autodump ]; then
-            BINARY=$(find ${{ github.workspace }}/build/dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
-            if [ -n "$BINARY" ]; then
-              cp "$BINARY" $PKG/usr/local/bin/usb-autodump
-            fi
+          # Copy ALL libs from AppDir (preserve dir structure under usr/)
+          if [ -d "$APPDIR/usr" ]; then
+            cp -rn $APPDIR/usr/lib/* $PKG/usr/local/lib/ 2>/dev/null || true
+            cp -rn $APPDIR/usr/lib64/* $PKG/usr/local/lib/ 2>/dev/null || true
+          fi
+
+          # Fallback: if linuxdeployqt didn't populate libs, copy from build
+          if [ ! "$(ls -A $PKG/usr/local/lib/*.so* 2>/dev/null)" ]; then
+            echo "WARNING: no libs in AppDir, trying build dir"
+            for f in $(find ${{ github.workspace }}/build -name "*.so*" -type f 2>/dev/null); do
+              cp "$f" $PKG/usr/local/lib/
+            done
           fi
 
           chmod 755 $PKG/usr/local/bin/usb-autodump
           cp ${{ github.workspace }}/linux/usb-autodump.desktop $PKG/usr/share/applications/usb-autodump.desktop
           chmod 644 $PKG/usr/share/applications/usb-autodump.desktop
+
+          if [ -f ${{ github.workspace }}/icon.svg ]; then
+            cp ${{ github.workspace }}/icon.svg $PKG/usr/share/icons/hicolor/scalable/apps/usb-autodump.svg
+          fi
+
+          echo "=== Package contents ==="
+          find $PKG -type f | head -50
 
           mkdir -p dist
           fpm -s dir -t deb \
@@ -126,6 +145,9 @@ jobs:
             usr/
 
           ls -lh dist/usb-autodump_1.0.0_amd64.deb
+
+          echo "=== DEB contents ==="
+          dpkg -c dist/usb-autodump_1.0.0_amd64.deb | grep -E "so|lib|bin"
 
       - uses: actions/upload-artifact@v4
         with:
