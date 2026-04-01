@@ -14,7 +14,8 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y qtbase5-dev qtchooser qt5-qmake cmake build-essential dpkg wget
+          sudo apt-get install -y qtbase5-dev qtchooser qt5-qmake cmake build-essential dpkg wget ruby ruby-dev rubygems build-essential
+          sudo gem install fpm --no-document
 
       - name: Configure & Build
         run: |
@@ -33,58 +34,77 @@ jobs:
         env:
           QMake: /usr/lib/qt5/bin/qmake
         run: |
-          cd /tmp
-          # Set up Qt plugins path
+          cd ${{ github.workspace }}
           export QT_QPA_PLATFORM=minimal
-          # Bundle the binary and all Qt dependencies into a temp dir
-          /tmp/linuxdeployqt /home/runner/work/usb-autodump/usb-autodump/dist/*/usb-autodump \
+          export LD_LIBRARY_PATH=${{ github.workspace }}/build/dist/*/:$LD_LIBRARY_PATH 2>/dev/null || true
+          BINARY=$(find build/dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
+          if [ -z "$BINARY" ]; then
+            BINARY=$(find dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
+          fi
+          if [ -z "$BINARY" ]; then
+            echo "ERROR: usb-autodump binary not found"
+            exit 1
+          fi
+          echo "Found binary: $BINARY"
+
+          # Create a temp AppDir for linuxdeployqt
+          APPDIR=/tmp/usb-autodump-appdir
+          rm -rf $APPDIR
+          mkdir -p $APPDIR/usr/bin
+          cp "$BINARY" $APPDIR/usr/bin/usb-autodump
+          chmod 755 $APPDIR/usr/bin/usb-autodump
+
+          # Copy desktop and icon
+          mkdir -p $APPDIR/usr/share/applications
+          cp linux/usb-autodump.desktop $APPDIR/usr/share/applications/usb-autodump.desktop
+          if [ -f icon.svg ]; then
+            mkdir -p $APPDIR/usr/share/icons/hicolor/scalable/apps
+            cp icon.svg $APPDIR/usr/share/icons/hicolor/scalable/apps/usb-autodump.svg
+          fi
+
+          cd /tmp
+          export LD_LIBRARY_PATH=$APPDIR/usr/bin:$LD_LIBRARY_PATH
+          /tmp/linuxdeployqt $APPDIR/usr/bin/usb-autodump \
             -unsupported-allow-new-glibc \
             -no-translations \
             -no-strip \
-            -appimage-extract-and-run 2>&1 | tail -20
+            -appimage-extract-and-run 2>&1 | tail -30
+
           echo "--- linuxdeployqt done ---"
-          ls -la /home/runner/work/usb-autodump/usb-autodump/dist/*/ 2>/dev/null || echo "dist not found"
+          ls -la $APPDIR/usr/bin/ 2>/dev/null || echo "No usr/bin"
+          find $APPDIR -name "*.so*" 2>/dev/null | head -20
 
       - name: Package DEB with fpm
         run: |
-          sudo apt-get install -y ruby ruby-dev rubygems build-essential
-          sudo gem install fpm --no-document
-
           PKG=/tmp/usb-autodump-pkg
+          APPDIR=/tmp/usb-autodump-appdir
           rm -rf $PKG
           mkdir -p $PKG/DEBIAN
           mkdir -p $PKG/usr/local/bin
-          mkdir -p $PKG/usr/share/applications
           mkdir -p $PKG/usr/local/lib
+          mkdir -p $PKG/usr/share/applications
 
-          # Find the bundled AppRun or the binary directory
-          BUNDLE_DIR=$(find /home/runner/work/usb-autodump/usb-autodump/dist -name 'squashfs-root' -type d 2>/dev/null | head -1)
-          if [ -n "$BUNDLE_DIR" ]; then
-            # linuxdeployqt created an AppDir
-            cp -r "$BUNDLE_DIR/usr/local/bin/"* $PKG/usr/local/bin/ 2>/dev/null || true
-            cp -r "$BUNDLE_DIR/usr/local/lib/"* $PKG/usr/local/lib/ 2>/dev/null || true
-            # The main binary is in AppRun
-            if [ -f "$BUNDLE_DIR/AppRun" ]; then
-              cp "$BUNDLE_DIR/AppRun" $PKG/usr/local/bin/usb-autodump
-              chmod 755 $PKG/usr/local/bin/usb-autodump
+          # Copy binary and libs from AppDir
+          if [ -d "$APPDIR/usr/bin" ]; then
+            cp $APPDIR/usr/bin/usb-autodump $PKG/usr/local/bin/ 2>/dev/null || true
+            # Copy all libs
+            for f in $(find $APPDIR -name "*.so*" -type f 2>/dev/null); do
+              mkdir -p "$PKG/usr/local/lib/$(dirname $f | sed "s|$APPDIR||")"
+              cp "$f" "$PKG/usr/local/lib/$(dirname $f | sed "s|$APPDIR||")/"
+            done
+          fi
+
+          # Fallback if linuxdeployqt didn't work
+          if [ ! -f $PKG/usr/local/bin/usb-autodump ]; then
+            BINARY=$(find ${{ github.workspace }}/build/dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
+            if [ -n "$BINARY" ]; then
+              cp "$BINARY" $PKG/usr/local/bin/usb-autodump
             fi
           fi
 
-          # Fallback: just use the original binary if bundle didn't work
-          if [ ! -f $PKG/usr/local/bin/usb-autodump ]; then
-            BINARY=$(find /home/runner/work/usb-autodump/usb-autodump/dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
-            cp "$BINARY" $PKG/usr/local/bin/usb-autodump
-            chmod 755 $PKG/usr/local/bin/usb-autodump
-          fi
-
-          cp /home/runner/work/usb-autodump/usb-autodump/linux/usb-autodump.desktop $PKG/usr/share/applications/usb-autodump.desktop
+          chmod 755 $PKG/usr/local/bin/usb-autodump
+          cp ${{ github.workspace }}/linux/usb-autodump.desktop $PKG/usr/share/applications/usb-autodump.desktop
           chmod 644 $PKG/usr/share/applications/usb-autodump.desktop
-
-          # Copy icon if exists
-          if [ -f /home/runner/work/usb-autodump/usb-autodump/icon.svg ]; then
-            mkdir -p $PKG/usr/share/icons/hicolor/scalable/apps
-            cp /home/runner/work/usb-autodump/usb-autodump/icon.svg $PKG/usr/share/icons/hicolor/scalable/apps/usb-autodump.svg
-          fi
 
           mkdir -p dist
           fpm -s dir -t deb \
