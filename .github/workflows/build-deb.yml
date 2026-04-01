@@ -32,9 +32,9 @@ jobs:
 
       - name: Install linuxdeployqt
         run: |
-          wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage -O /tmp/linuxdeployqt
+          curl -sL https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage -o /tmp/linuxdeployqt
           chmod +x /tmp/linuxdeployqt
-          wget -q https://github.com/staticlibs/desktop-file-utils/releases/download/continuous/desktop-file-utils-continuous-x86_64.AppImage -O /tmp/desktop-file-utils
+          curl -sL https://github.com/staticlibs/desktop-file-utils/releases/download/continuous/desktop-file-utils-continuous-x86_64.AppImage -o /tmp/desktop-file-utils
           chmod +x /tmp/desktop-file-utils
 
       - name: Bundle Qt libs with linuxdeployqt
