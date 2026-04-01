@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QTemporaryFile>
+#include <QTimer>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -12,6 +13,19 @@
 #else
 #include <sys/statvfs.h>
 #endif
+
+QThread* DiskTool::s_workerThread = nullptr;
+QMutex DiskTool::s_mutex;
+
+// Global instance to emit signals from main thread
+static DiskTool* s_instance = nullptr;
+
+DiskTool* diskToolInstance() {
+    if (!s_instance) {
+        s_instance = new DiskTool();
+    }
+    return s_instance;
+}
 
 bool DiskTool::formatDrive(const QString& drive, const QString& fs, const QString& label) {
     QString drv = drive;
@@ -122,3 +136,42 @@ bool DiskTool::getDiskSpace(const QString& path, qint64& freeBytes, qint64& tota
     return false;
 #endif
 }
+
+// Helper class for async formatting
+class FormatRunner : public QObject {
+    Q_OBJECT
+public:
+    FormatRunner(const QString& drive, const QString& fs, const QString& label)
+        : m_drive(drive), m_fs(fs), m_label(label) {}
+public slots:
+    void run() {
+        bool ok = DiskTool::formatDrive(m_drive, m_fs, m_label);
+        QString error;
+        if (!ok) {
+            error = "格式化失败";
+        }
+        emit finished(m_drive, ok, error);
+        this->deleteLater();
+    }
+signals:
+    void finished(const QString& drive, bool ok, const QString& error);
+private:
+    QString m_drive, m_fs, m_label;
+};
+
+void DiskTool::asyncFormatDrive(const QString& drive, const QString& fs, const QString& label) {
+    QMutexLocker locker(&s_mutex);
+
+    if (!s_workerThread) {
+        s_workerThread = new QThread();
+        s_workerThread->start();
+    }
+
+    FormatRunner* runner = new FormatRunner(drive, fs, label);
+    runner->moveToThread(s_workerThread);
+    // Use QueuedConnection so signal is delivered to main thread
+    connect(runner, &FormatRunner::finished, diskToolInstance(), &DiskTool::formatFinished, Qt::QueuedConnection);
+    QTimer::singleShot(0, runner, SLOT(run()));
+}
+
+#include "disk_tool.moc"

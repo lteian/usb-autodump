@@ -14,7 +14,7 @@ class USBMonitor;
 class LogPanel;
 class UploadQueue;
 class DumpProcess;
-class FTPProcess;
+class FTPConnectionPool;
 class SettingsDialog;
 class USBDevice;
 class DiskSpaceWidget;
@@ -49,6 +49,7 @@ private slots:
     void onFTPLog(const QString& msg);
 
     void onFormatClicked(const QString& drive);
+    void onFormatFinished(const QString& drive, bool success, const QString& error);
     void onEjectClicked(const QString& drive);
     void onCancelDumpClicked(const QString& drive);
     void onSettingsClicked();
@@ -71,7 +72,7 @@ private:
 
     USBMonitor* m_usbMonitor = nullptr;
     QMap<QString, DumpProcess*> m_dumpProcesses; // drive -> DumpProcess
-    FTPProcess* m_ftpProcess = nullptr;
+    FTPConnectionPool* m_ftpProcess = nullptr;
 
     LogPanel* m_logPanel = nullptr;
     UploadQueue* m_uploadQueue = nullptr;

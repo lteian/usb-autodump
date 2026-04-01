@@ -6,7 +6,7 @@
 #include "password_dialog.h"
 #include "usb_monitor.h"
 #include "dump_process.h"
-#include "ftp_process.h"
+#include "ftp_pool.h"
 #include "disk_tool.h"
 #include "file_record.h"
 #include "upload_queue.h"
@@ -248,14 +248,17 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_usbMonitor, &USBMonitor::deviceInserted, this, &MainWindow::onDeviceInserted);
     connect(m_usbMonitor, &USBMonitor::deviceRemoved, this, &MainWindow::onDeviceRemoved);
 
-    // ── FTP Process ────────────────────────────────────────
-    m_ftpProcess = new FTPProcess(this);
-    connect(m_ftpProcess, &FTPProcess::uploadProgress, this, &MainWindow::onFTPUploadProgress);
-    connect(m_ftpProcess, &FTPProcess::uploadDone, this, &MainWindow::onFTPUploadDone);
-    connect(m_ftpProcess, &FTPProcess::fileDeleted, this, &MainWindow::onFTPFileDeleted);
-    connect(m_ftpProcess, &FTPProcess::uploadError, this, &MainWindow::onFTPUploadError);
-    connect(m_ftpProcess, &FTPProcess::connectedChanged, this, &MainWindow::onFTPConnectedChanged);
-    connect(m_ftpProcess, &FTPProcess::logMessage, this, &MainWindow::onFTPLog);
+    // ── FTP Process (5 parallel connections) ───────────────
+    m_ftpProcess = new FTPConnectionPool(this, 5);
+    connect(m_ftpProcess, &FTPConnectionPool::uploadProgress, this, &MainWindow::onFTPUploadProgress);
+    connect(m_ftpProcess, &FTPConnectionPool::uploadDone, this, &MainWindow::onFTPUploadDone);
+    connect(m_ftpProcess, &FTPConnectionPool::fileDeleted, this, &MainWindow::onFTPFileDeleted);
+    connect(m_ftpProcess, &FTPConnectionPool::uploadError, this, &MainWindow::onFTPUploadError);
+    connect(m_ftpProcess, &FTPConnectionPool::connectedChanged, this, &MainWindow::onFTPConnectedChanged);
+    connect(m_ftpProcess, &FTPConnectionPool::logMessage, this, &MainWindow::onFTPLog);
+
+    // ── Disk Tool (for async format) ─────────────────────────
+    connect(diskToolInstance(), &DiskTool::formatFinished, this, &MainWindow::onFormatFinished);
 
     for (const USBDevice& dev : m_usbMonitor->currentDevices()) {
         QTimer::singleShot(500, this, [this, dev]() {
@@ -527,7 +530,12 @@ void MainWindow::onFormatClicked(const QString& drive) {
     if (r != QMessageBox::Yes) return;
     card->setStatus("formatting");
     m_logPanel->appendWarning("开始格式化 " + drive + " ...");
-    bool ok = DiskTool::formatDrive(drive);
+    DiskTool::asyncFormatDrive(drive);
+}
+
+void MainWindow::onFormatFinished(const QString& drive, bool ok, const QString& error) {
+    Q_UNUSED(error);
+    USBCard* card = m_driveToCard.value(drive, nullptr);
     if (ok) {
         // Copy license file to USB root
         QString appDir = QCoreApplication::applicationDirPath();
@@ -542,9 +550,9 @@ void MainWindow::onFormatClicked(const QString& drive) {
         } else {
             m_logPanel->appendWarning("未找到授权文件: " + licenseSrc);
         }
-        card->setStatus("no_files");
+        if (card) card->setStatus("no_files");
     } else {
-        card->setStatus("done");
+        if (card) card->setStatus("done");
     }
     m_logPanel->appendInfo(ok ? ("格式化成功: " + drive) : ("格式化失败: " + drive));
 }
