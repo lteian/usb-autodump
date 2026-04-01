@@ -17,7 +17,7 @@ file(MAKE_DIRECTORY "${DIST_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${DIST_DIR}")
 
 # Main executable
-add_executable(usb-autodump WIN32
+set(APP_SOURCES
     src/main.cpp
     src/mainwindow.cpp
     src/usb_card.cpp
@@ -35,8 +35,17 @@ add_executable(usb-autodump WIN32
     src/ftp_pool.cpp
     src/disk_ring.cpp
     src/disk_space_widget.cpp
-    src/win32_icon.rc
 )
+
+if(WIN32)
+    list(APPEND APP_SOURCES src/win32_icon.rc)
+endif()
+
+if(WIN32)
+    add_executable(usb-autodump WIN32 ${APP_SOURCES})
+else()
+    add_executable(usb-autodump ${APP_SOURCES})
+endif()
 
 target_link_libraries(usb-autodump
     Qt5::Core
