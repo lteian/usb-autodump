@@ -145,7 +145,7 @@ MainWindow::MainWindow(QWidget* parent)
         connect(card, &USBCard::ejectClicked, this, &MainWindow::onEjectClicked);
         connect(card, &USBCard::cancelDumpClicked, this, &MainWindow::onCancelDumpClicked);
     }
-    leftVl->addWidget(leftCard, 3);  // 30%
+    leftVl->addStretch(3);  // add stretch at bottom
     mainHl->addWidget(leftCard, 3);  // 30%
 
     // Middle Column: Pie Chart (80%) + Log (20%)
@@ -228,11 +228,11 @@ MainWindow::MainWindow(QWidget* parent)
         }
         QPushButton:hover { color: #3B82F6; background: #F1F5F9; border-color: #3B82F6; }
     )");
-    connect(clearBtn, &QPushButton::clicked, m_uploadQueue, &UploadQueue::clearCompleted);
     queueHeader->addWidget(clearBtn);
     rightVl->addLayout(queueHeader);
 
     m_uploadQueue = new UploadQueue();
+    connect(clearBtn, &QPushButton::clicked, m_uploadQueue, &UploadQueue::clearCompleted);
     rightVl->addWidget(m_uploadQueue, 1);
     mainHl->addWidget(rightCard, 3);  // 30%
 
