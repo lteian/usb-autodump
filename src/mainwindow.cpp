@@ -412,8 +412,13 @@ void MainWindow::onDumpCopyFileDone(const QString& drive, const QString& file,
     rec.fileSize = fileSize;
     rec.status = "pending";
     int recordId = FileRecordDB::instance().add(rec);
+    if (recordId < 0) {
+        m_logPanel->appendWarning(QString("%1 数据库添加失败: %2").arg(fname).arg(localPath));
+        return;
+    }
 
     m_uploadQueue->addFile(recordId, drive, file, localPath, fileSize);
+    m_logPanel->appendDebug(QString("%1 已加入上传队列 (recordId=%2)").arg(fname).arg(recordId));
     updateQueueCount();
 
     Config& cfg = Config::instance();
