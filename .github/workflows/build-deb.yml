@@ -16,11 +16,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qtbase5-dev qtchooser qt5-qmake cmake build-essential dpkg wget ruby ruby-dev rubygems build-essential
           sudo gem install fpm --no-document
+          # Debug: verify Qt5 cmake files exist
+          find /usr -name "Qt5Config.cmake" 2>/dev/null
+          dpkg -L qtbase5-dev | grep -E "cmake|pri" | head -10
 
       - name: Configure & Build
         run: |
+          # Find Qt5 cmake files
+          QT5_PREFIX=$(dpkg -L qtbase5-dev 2>/dev/null | grep 'cmake/Qt5' | sed 's|/cmake/Qt5||' | head -1)
+          if [ -z "$QT5_PREFIX" ]; then QT5_PREFIX="/usr/lib/x86_64-linux-gnu"; fi
+          echo "Qt5 prefix: $QT5_PREFIX"
           mkdir -p build && cd build
-          cmake ..
+          cmake .. -DCMAKE_PREFIX_PATH="$QT5_PREFIX"
           cmake --build . --config Release
 
       - name: Install linuxdeployqt
