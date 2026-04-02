@@ -39,10 +39,17 @@ jobs:
           mkdir -p $PKG/usr/share/applications
           mkdir -p $PKG/usr/share/icons/hicolor/scalable/apps
 
-          # Find binary
+          # Find binary (try build/dist first, then dist/<date>)
           BINARY=$(find ${{ github.workspace }}/build/dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
           if [ -z "$BINARY" ]; then
+            BINARY=$(find ${{ github.workspace }}/dist -name 'usb-autodump' -type f 2>/dev/null | head -1)
+          fi
+          if [ -z "$BINARY" ]; then
             echo "ERROR: usb-autodump binary not found"
+            echo "Contents of build/dist:"
+            find ${{ github.workspace }}/build/dist -type f 2>/dev/null || echo "(empty)"
+            echo "Contents of dist:"
+            find ${{ github.workspace }}/dist -type f 2>/dev/null || echo "(empty)"
             exit 1
           fi
           echo "Binary: $BINARY"
