@@ -37,6 +37,7 @@ private:
 
     QTimer* m_timer = nullptr;
     QMap<QString, USBDevice> m_lastDevices;
+    QMap<QString, int> m_missingCount; // track consecutive poll misses before declaring removed
 };
 
 #endif // USB_MONITOR_H

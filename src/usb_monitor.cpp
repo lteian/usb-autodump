@@ -42,12 +42,21 @@ void USBMonitor::poll() {
         if (!m_lastDevices.contains(letter)) {
             emit deviceInserted(currentMap[letter]);
         }
+        // Reset missing counter when device is present
+        if (m_missingCount.contains(letter)) {
+            m_missingCount.remove(letter);
+        }
     }
 
-    // Detect removed
+    // Detect removed - only after missing for 3 consecutive polls
     for (const QString& letter : m_lastDevices.keys()) {
         if (!currentMap.contains(letter)) {
-            emit deviceRemoved(letter);
+            int missCount = m_missingCount.value(letter, 0) + 1;
+            m_missingCount[letter] = missCount;
+            if (missCount >= 3) {
+                emit deviceRemoved(letter);
+                emit debugMessage(QString("USB %1 已移除 (连续检测失败%2次)").arg(letter).arg(missCount));
+            }
         }
     }
 
@@ -60,28 +69,38 @@ QList<USBDevice> USBMonitor::detectDevices() {
 #ifdef _WIN32
     // Use wmic on Windows — output is fixed-width columns, NOT space-delimited
     QProcess p;
+    p.setProcessChannelMode(QProcess::MergedChannels);
     p.start("wmic", QStringList() << "logicaldisk" << "where" << "DriveType=2" << "get" << "DeviceID,VolumeName,Size,FreeSpace");
-    p.waitForFinished(5000);
-    QString output = QString::fromLocal8Bit(p.readAll());
+    // Increase timeout to 15s - heavy I/O during dump can cause WMIC to be slow
+    bool finished = p.waitForFinished(15000);
+    QString output;
+    if (finished) {
+        output = QString::fromLocal8Bit(p.readAll());
+    } else {
+        p.kill();
+        emit debugMessage("WMIC timed out, killed process");
+    }
 
-    emit debugMessage("WMIC raw output: " + output);
+    if (!output.isEmpty()) {
+        emit debugMessage("WMIC raw output: " + output);
 
-    // Some WMIC versions output header and data on same line, or without proper newlines
-    // Try to find drive letter patterns anywhere in output
-    QRegExp rxDrive("([A-Za-z]:)\\s+(\\d+)\\s+(\\d+)(?:\\s+(\\S+))?");
-    int pos = 0;
-    while ((pos = rxDrive.indexIn(output, pos)) >= 0) {
-        QStringList caps = rxDrive.capturedTexts();
-        if (caps.size() >= 4) {
-            USBDevice dev;
-            dev.driveLetter = caps[1];
-            dev.freeSpace = caps[2].toLongLong();
-            dev.totalSize = caps[3].toLongLong();
-            dev.label = caps.size() > 4 && !caps[4].isEmpty() ? caps[4] : "U盘";
-            emit debugMessage(QString("检测到USB设备: %1 标签: %2 大小: %3").arg(dev.driveLetter).arg(dev.label).arg(dev.totalSize));
-            if (dev.totalSize > 0) list << dev;
+        // Some WMIC versions output header and data on same line, or without proper newlines
+        // Try to find drive letter patterns anywhere in output
+        QRegExp rxDrive("([A-Za-z]:)\\s+(\\d+)\\s+(\\d+)(?:\\s+(\\S+))?");
+        int pos = 0;
+        while ((pos = rxDrive.indexIn(output, pos)) >= 0) {
+            QStringList caps = rxDrive.capturedTexts();
+            if (caps.size() >= 4) {
+                USBDevice dev;
+                dev.driveLetter = caps[1];
+                dev.freeSpace = caps[2].toLongLong();
+                dev.totalSize = caps[3].toLongLong();
+                dev.label = caps.size() > 4 && !caps[4].isEmpty() ? caps[4] : "U盘";
+                emit debugMessage(QString("检测到USB设备: %1 标签: %2 大小: %3").arg(dev.driveLetter).arg(dev.label).arg(dev.totalSize));
+                if (dev.totalSize > 0) list << dev;
+            }
+            pos += rxDrive.matchedLength();
         }
-        pos += rxDrive.matchedLength();
     }
 #else
     // Linux: use lsblk
