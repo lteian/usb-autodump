@@ -540,8 +540,31 @@ void MainWindow::onFormatClicked(const QString& drive) {
 
 void MainWindow::onFormatFinished(const QString& drive, bool ok, const QString& error) {
     Q_UNUSED(error);
-    USBCard* card = m_driveToCard.value(drive, nullptr);
     if (ok) {
+        // Card might have been removed from m_driveToCard during format (if USB briefly disconnected)
+        // Find and reassign the card if needed
+        USBCard* card = m_driveToCard.value(drive, nullptr);
+        if (!card) {
+            // Find the first cleared card (property "drive" is empty)
+            for (USBCard* c : m_cards) {
+                if (c->property("drive").toString().isEmpty()) {
+                    card = c;
+                    m_driveToCard[drive] = card;
+                    break;
+                }
+            }
+        }
+        if (card) {
+            // Re-detect the USB to get correct size info
+            QList<USBDevice> devs = m_usbMonitor->currentDevices();
+            for (const USBDevice& dev : devs) {
+                if (dev.driveLetter == drive) {
+                    card->setDrive(drive, dev.label, dev.totalSize, dev.usedSize(), dev.freeSpace);
+                    break;
+                }
+            }
+            card->setStatus("no_files");
+        }
         // Copy license file to USB root
         QString appDir = QCoreApplication::applicationDirPath();
         QString licenseSrc = appDir + "/license.txt";
@@ -555,8 +578,8 @@ void MainWindow::onFormatFinished(const QString& drive, bool ok, const QString& 
         } else {
             m_logPanel->appendWarning("未找到授权文件: " + licenseSrc);
         }
-        if (card) card->setStatus("no_files");
     } else {
+        USBCard* card = m_driveToCard.value(drive, nullptr);
         if (card) card->setStatus("done");
     }
     m_logPanel->appendInfo(ok ? ("格式化成功: " + drive) : ("格式化失败: " + drive));
