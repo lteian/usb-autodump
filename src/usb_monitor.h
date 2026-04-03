@@ -27,6 +27,7 @@ public:
 signals:
     void deviceInserted(const USBDevice& dev);
     void deviceRemoved(const QString& drive);
+    void debugMessage(const QString& msg);
 
 private slots:
     void poll();

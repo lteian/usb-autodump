@@ -247,6 +247,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_usbMonitor = new USBMonitor(this);
     connect(m_usbMonitor, &USBMonitor::deviceInserted, this, &MainWindow::onDeviceInserted);
     connect(m_usbMonitor, &USBMonitor::deviceRemoved, this, &MainWindow::onDeviceRemoved);
+    connect(m_usbMonitor, &USBMonitor::debugMessage, m_logPanel, &LogPanel::appendDebug);
 
     // ── FTP Process (5 parallel connections) ───────────────
     m_ftpProcess = new FTPConnectionPool(this, 5);

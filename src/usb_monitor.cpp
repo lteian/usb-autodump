@@ -64,7 +64,7 @@ QList<USBDevice> USBMonitor::detectDevices() {
     p.waitForFinished(5000);
     QString output = QString::fromLocal8Bit(p.readAll());
 
-    qDebug() << "WMIC output:" << output;
+    emit debugMessage("WMIC raw output: " + output);
 
     QStringList lines = output.split('\n', Qt::SkipEmptyParts);
     for (const QString& line : lines) {
@@ -85,7 +85,7 @@ QList<USBDevice> USBMonitor::detectDevices() {
                 dev.totalSize = caps[2].toLongLong();
                 dev.freeSpace = caps[3].toLongLong();
                 dev.label = "U盘";
-                qDebug() << "Detected USB (fallback):" << dev.driveLetter << "Size:" << dev.totalSize;
+                emit debugMessage(QString("检测到USB设备(fallback): %1 大小: %2").arg(dev.driveLetter).arg(dev.totalSize));
                 if (dev.totalSize > 0) list << dev;
             }
             continue;
@@ -98,7 +98,7 @@ QList<USBDevice> USBMonitor::detectDevices() {
         if (dev.label.isEmpty()) dev.label = "U盘";
         dev.totalSize = caps[3].toLongLong();
         dev.freeSpace = caps[4].toLongLong();
-        qDebug() << "Detected USB:" << dev.driveLetter << "Label:" << dev.label << "Size:" << dev.totalSize;
+        emit debugMessage(QString("检测到USB设备: %1 标签: %2 大小: %3").arg(dev.driveLetter).arg(dev.label).arg(dev.totalSize));
         if (dev.totalSize > 0) list << dev;
     }
 #else
