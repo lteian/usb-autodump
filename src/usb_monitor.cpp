@@ -66,40 +66,22 @@ QList<USBDevice> USBMonitor::detectDevices() {
 
     emit debugMessage("WMIC raw output: " + output);
 
-    QStringList lines = output.split('\n', Qt::SkipEmptyParts);
-    for (const QString& line : lines) {
-        if (line.trimmed().isEmpty()) continue;
-        // Skip header line
-        if (line.trimmed().startsWith("DeviceID")) continue;
-
-        // wmic output is fixed-width: DeviceID(12) VolumeName(20) Size(20) FreeSpace(20)
-        // Columns are 0-indexed and variable-width on some systems, so use regex extraction
-        QRegExp rx("^\\s*([A-Za-z]:)\\s+([^\\s].*?)\\s+(\\d+)\\s+(\\d+)\\s*$");
-        if (rx.indexIn(line) < 0) {
-            // Fallback: try simpler pattern for lines without VolumeName
-            QRegExp rx2("^\\s*([A-Za-z]:)\\s+(\\d+)\\s+(\\d+)\\s*$");
-            if (rx2.indexIn(line) >= 0) {
-                QStringList caps = rx2.capturedTexts();
-                USBDevice dev;
-                dev.driveLetter = caps[1];
-                dev.totalSize = caps[2].toLongLong();
-                dev.freeSpace = caps[3].toLongLong();
-                dev.label = "U盘";
-                emit debugMessage(QString("检测到USB设备(fallback): %1 大小: %2").arg(dev.driveLetter).arg(dev.totalSize));
-                if (dev.totalSize > 0) list << dev;
-            }
-            continue;
+    // Some WMIC versions output header and data on same line, or without proper newlines
+    // Try to find drive letter patterns anywhere in output
+    QRegExp rxDrive("([A-Za-z]:)\\s+(\\d+)\\s+(\\d+)(?:\\s+(\\S+))?");
+    int pos = 0;
+    while ((pos = rxDrive.indexIn(output, pos)) >= 0) {
+        QStringList caps = rxDrive.capturedTexts();
+        if (caps.size() >= 4) {
+            USBDevice dev;
+            dev.driveLetter = caps[1];
+            dev.freeSpace = caps[2].toLongLong();
+            dev.totalSize = caps[3].toLongLong();
+            dev.label = caps.size() > 4 && !caps[4].isEmpty() ? caps[4] : "U盘";
+            emit debugMessage(QString("检测到USB设备: %1 标签: %2 大小: %3").arg(dev.driveLetter).arg(dev.label).arg(dev.totalSize));
+            if (dev.totalSize > 0) list << dev;
         }
-
-        QStringList caps = rx.capturedTexts();
-        USBDevice dev;
-        dev.driveLetter = caps[1].trimmed();
-        dev.label = caps[2].trimmed();
-        if (dev.label.isEmpty()) dev.label = "U盘";
-        dev.totalSize = caps[3].toLongLong();
-        dev.freeSpace = caps[4].toLongLong();
-        emit debugMessage(QString("检测到USB设备: %1 标签: %2 大小: %3").arg(dev.driveLetter).arg(dev.label).arg(dev.totalSize));
-        if (dev.totalSize > 0) list << dev;
+        pos += rxDrive.matchedLength();
     }
 #else
     // Linux: use lsblk
